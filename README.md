@@ -1,70 +1,92 @@
-# Getting Started with Create React App
+📊 Clasificación Financiera - Extensión
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Este proyecto está basado en un repositorio original, pero se extendió con nuevas funcionalidades en el frontend.
 
-## Available Scripts
+✅ Cambios realizados
+1. Carpeta experimental
 
-In the project directory, you can run:
+Se creó la carpeta:
 
-### `npm start`
+src/experimental/recent-movements/
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+Contiene el componente RecentMovements.jsx, que muestra ingresos, gastos y productos añadidos.
 
-### `npm test`
+2. Servicio de API
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+Se creó el archivo:
 
-### `npm run build`
+src/services/movements.js
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+Permite obtener los movimientos recientes desde un backend o desde json-server (mock API).
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+3. Integración en el Dashboard
 
-### `npm run eject`
+Se importó RecentMovements en Dashboard.jsx.
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+Ahora el Dashboard muestra:
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+Resumen de ingresos, gastos y balance.
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+Últimas transacciones.
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+Movimientos Recientes (conectados a json-server).
 
-## Learn More
+4. API Mock con json-server
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+Se agregó el archivo db.json en la raíz con datos de ejemplo.
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+Se configuró el script en package.json:
 
-### Code Splitting
+"server": "npx json-server --watch db.json --port 4000"
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
 
-### Analyzing the Bundle Size
+Permite levantar un servidor de prueba en:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+http://localhost:4000/movimientos
 
-### Making a Progressive Web App
+5. Dependencias
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+Se instaló json-server como dependencia de desarrollo:
 
-### Advanced Configuration
+npm install --save-dev json-server
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+🚀 Cómo ejecutar
 
-### Deployment
+Instalar dependencias:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+npm install
 
-### `npm run build` fails to minify
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+Iniciar backend simulado:
+
+npm run server
+
+
+Iniciar frontend:
+
+npm start
+
+
+Abrir en navegador:
+
+http://localhost:3000/
+
+📌 Rama actual
+
+Este trabajo se encuentra en la rama:
+
+feature/movimientos-recientes
+
+🔮 Próximos pasos sugeridos
+
+Conectar el componente RecentMovements a un backend real (Django/Node).
+
+Ampliar el Dashboard con un botón "Ver más" para mostrar el historial completo de movimientos.
+
+Unificar estilos con el resto de páginas (Clientes, Facturación, Inventario).
+
+🔗 Repositorio original
+
+Este proyecto fue descargado y extendido a partir de otro repositorio base.

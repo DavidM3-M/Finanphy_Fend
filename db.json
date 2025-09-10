@@ -1,0 +1,25 @@
+{
+  "movimientos": [
+    {
+      "id": 1,
+      "type": "Ingreso",
+      "description": "Venta producto X",
+      "amount": 16000,
+      "date": "2025-09-01"
+    },
+    {
+      "id": 2,
+      "type": "Gasto",
+      "description": "Pago proveedor",
+      "amount": -5000,
+      "date": "2025-09-02"
+    },
+    {
+      "id": 3,
+      "type": "Producto",
+      "description": "Nuevo producto agregado: Impresora",
+      "amount": null,
+      "date": "2025-09-03"
+    }
+  ]
+}

@@ -21,33 +21,17 @@ const Sidebar = () => {
       icon: LayoutDashboard,
       description: "Vista general"
     },
-    { 
-      path: "/facturacion", 
-      label: "Facturación", 
-      icon: FileText,
-      description: "Gestión de facturas"
-    },
+    
     { 
       path: "/inventario", 
       label: "Inventario", 
       icon: Package,
       description: "Control de productos"
     },
-    { 
-      path: "/clientes", 
-      label: "Clientes", 
-      icon: Users,
-      description: "Base de clientes"
-    },
-    { 
-      path: "/pagos", 
-      label: "Pagos", 
-      icon: CreditCard,
-      description: "Gestión financiera"
-    },
+    
     { 
       path: "/clasificacion", 
-      label: "Clasificación", 
+      label: "Movimientos", 
       icon: TrendingUp,
       description: "Ingresos y gastos"
     },
@@ -57,6 +41,7 @@ const Sidebar = () => {
       icon: BarChart3,
       description: "Análisis y métricas"
     },
+
   ];
 
   return (

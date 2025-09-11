@@ -103,10 +103,18 @@ const Clasificacion = () => {
     fetchData();
   }, []);
 
-  const datosOrdenados = useMemo(
-    () => [...datos].sort((a, b) => new Date(b.fecha) - new Date(a.fecha)),
-    [datos]
-  );
+  // Ordenar datos por fecha para línea de tiempo
+  const datosOrdenados = useMemo(() => {
+  return [...datos]
+    .filter((d) => d.fecha)
+    .map((d) => ({
+      ...d,
+      fechaObj: new Date(d.fecha),
+    }))
+    .sort((a, b) => b.fechaObj - a.fechaObj); // descnedente
+}, [datos]);
+
+
 
   const ingresos = datos.filter((d) => d.tipo === "ingreso");
   const gastos = datos.filter((d) => d.tipo === "gasto");
@@ -522,7 +530,7 @@ const Clasificacion = () => {
               <p>Comienza registrando tu primer ingreso o gasto.</p>
             </div>
           ) : (
-            <div className="relative">
+            <div className="relative flex flex-col">
               {/* Línea central */}
               <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-gradient-to-b from-slate-200 via-slate-300 to-slate-200 transform -translate-x-1/2" />
 

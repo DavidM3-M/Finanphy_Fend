@@ -7,6 +7,7 @@ const Navbar = () => {
   const navItems = [
     { path: "/dashboard", label: "Dashboard" },
     { path: "/clasificacion", label: "Clasificación" },
+    { path: "/reportes", label: "Reportes" }, // ✅ Agregado
   ];
 
   return (

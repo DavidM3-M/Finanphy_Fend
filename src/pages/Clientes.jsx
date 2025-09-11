@@ -1,3 +1,4 @@
+/*
 import { useEffect, useState } from "react";
 import { getClientes } from "../services/api";
 
@@ -49,4 +50,4 @@ export default function Clientes() {
       )}
     </div>
   );
-}
+}*/

@@ -1,0 +1,42 @@
+{
+  "compilerOptions": {
+    // Target y módulos
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "node",
+    "jsx": "react-jsx",
+
+    // Librerías disponibles (DOM, ESNext, etc.)
+    "lib": ["dom", "dom.iterable", "esnext"],
+
+    // Permitir archivos JS y JSON
+    "allowJs": true,
+    "resolveJsonModule": true,
+
+    // Emission (CRA no emite: usa Babel/webpack)
+    "noEmit": true,
+    "isolatedModules": true,
+
+    // Interoperabilidad de módulos
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+
+    // Verificaciones estrictas
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+
+    // Base URL y paths para imports absolutos desde src/
+    "baseUrl": "src",
+    "paths": {
+      "components/*": ["components/*"],
+      "pages/*": ["pages/*"],
+      "context/*": ["context/*"],
+      "services/*": ["services/*"],
+      "api/*": ["api/*"],
+      "hooks/*": ["hooks/*"]
+    }
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist"]
+}

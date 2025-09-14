@@ -10,11 +10,18 @@ interface PrivateRouteProps {
 export default function PrivateRoute({ children, requiredRole }: PrivateRouteProps) {
   const { token, user, isLoading } = useAuth();
 
-  if (isLoading) return <div className="text-center p-10">Cargando...</div>;
+  if (isLoading) {
+    return <div className="text-center p-10">Cargando...</div>;
+  }
 
-  if (!token || !user) return <Navigate to="/login" />;
+  // 🔁 Corrige la ruta de login
+  if (!token || !user) {
+    return <Navigate to="/auth/login" replace />;
+  }
 
-  if (requiredRole && user.role !== requiredRole) return <Navigate to="/unauthorized" />;
+  if (requiredRole && user.role !== requiredRole) {
+    return <Navigate to="/unauthorized" replace />;
+  }
 
   return <>{children}</>;
 }

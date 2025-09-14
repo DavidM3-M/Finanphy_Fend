@@ -1,3 +1,4 @@
+// src/pages/Dashboard.jsx
 import React, { useEffect, useState } from "react";
 import api from "../services/api";
 import {
@@ -13,7 +14,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-const Dashboard = () => {
+export default function Dashboard() {
   const [resumen, setResumen] = useState({
     ingresos: 0,
     gastos: 0,
@@ -23,7 +24,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const fetchResumen = async () => {
+  async function fetchResumen() {
     setLoading(true);
     setError(null);
     try {
@@ -42,7 +43,7 @@ const Dashboard = () => {
       );
       const balance = ingresos - gastos;
 
-      const transacciones = [
+      const todos = [
         ...incomesRes.data.map((i) => ({
           fecha: i.exitDate || i.dueDate,
           descripcion: i.supplier || "Ingreso sin proveedor",
@@ -60,36 +61,37 @@ const Dashboard = () => {
         .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
         .slice(0, 10);
 
-      setResumen({ ingresos, gastos, balance, transacciones });
+      setResumen({
+        ingresos,
+        gastos,
+        balance,
+        transacciones: todos,
+      });
     } catch (err) {
-      setError(err.response?.data?.message || "Error al cargar el dashboard");
+      setError(
+        err.response?.data?.message || "Error al cargar el dashboard"
+      );
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   useEffect(() => {
     fetchResumen();
   }, []);
 
-  // Preparar datos para gráficos
-  const agrupadoPorFecha = {};
+  // Preparar datos para LineChart
+  const agrupado = {};
   resumen.transacciones.forEach((t) => {
     const fecha = new Date(t.fecha).toLocaleDateString("es-CO");
-    if (!agrupadoPorFecha[fecha]) {
-      agrupadoPorFecha[fecha] = { fecha, ingresos: 0, gastos: 0 };
-    }
-    if (t.tipo === "Ingreso") {
-      agrupadoPorFecha[fecha].ingresos += t.monto;
-    } else {
-      agrupadoPorFecha[fecha].gastos += t.monto;
-    }
+    if (!agrupado[fecha]) agrupado[fecha] = { fecha, ingresos: 0, gastos: 0 };
+    agrupado[fecha][t.tipo === "Ingreso" ? "ingresos" : "gastos"] += t.monto;
   });
-
-  const datosLineales = Object.values(agrupadoPorFecha).sort(
+  const datosLineales = Object.values(agrupado).sort(
     (a, b) => new Date(a.fecha) - new Date(b.fecha)
   );
 
+  // Datos para PieChart
   const datosPastel = [
     { name: "Ingresos", value: resumen.ingresos },
     { name: "Gastos", value: resumen.gastos },
@@ -97,43 +99,74 @@ const Dashboard = () => {
   const colores = ["#4ade80", "#f87171"];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-      <div className="bg-slate-800 text-white py-10 px-8">
-        <h1 className="text-4xl font-bold">Dashboard</h1>
-        <p className="text-slate-300 text-lg mt-1">
-          Resumen general de la empresa
-        </p>
-      </div>
-
-      <div className="max-w-6xl mx-auto px-8 py-10">
+    <div className="min-h-screen bg-[#fffbeb]">
+      <div className="max-w-6xl mx-auto px-6 py-10 space-y-8">
         {error && (
-          <div className="mb-6 p-4 rounded bg-red-50 text-red-600">
+          <div className="rounded-2xl bg-red-50 border border-red-200 text-red-600 p-4">
             {error}
           </div>
         )}
 
         {loading ? (
-          <p className="text-center text-gray-500">Cargando...</p>
+          <div className="flex justify-center py-20">
+            <svg
+              className="animate-spin h-8 w-8 text-[#fe9a00]"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8v8z"
+              />
+            </svg>
+          </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-              <div className="p-6 bg-white rounded-lg shadow">
-                <h3 className="text-gray-500 text-sm">Ingresos Totales</h3>
-                <p className="text-2xl font-bold text-green-600">
+            {/* Cabecera */}
+            <div className="bg-white rounded-2xl border border-[#fef3c6] shadow p-8">
+              <h1 className="text-4xl font-bold text-[#973c00]">
+                Dashboard
+              </h1>
+              <p className="text-lg text-[#bb4d00] mt-1">
+                Resumen general de la empresa
+              </p>
+            </div>
+
+            {/* Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-white rounded-2xl border border-[#fef3c6] shadow p-6">
+                <h3 className="text-sm text-[#973c00]">
+                  Ingresos Totales
+                </h3>
+                <p className="text-2xl font-bold text-green-600 mt-2">
                   ${resumen.ingresos.toLocaleString("es-CO")}
                 </p>
               </div>
-              <div className="p-6 bg-white rounded-lg shadow">
-                <h3 className="text-gray-500 text-sm">Gastos Totales</h3>
-                <p className="text-2xl font-bold text-red-600">
+              <div className="bg-white rounded-2xl border border-[#fef3c6] shadow p-6">
+                <h3 className="text-sm text-[#973c00]">
+                  Gastos Totales
+                </h3>
+                <p className="text-2xl font-bold text-red-600 mt-2">
                   ${resumen.gastos.toLocaleString("es-CO")}
                 </p>
               </div>
-              <div className="p-6 bg-white rounded-lg shadow">
-                <h3 className="text-gray-500 text-sm">Balance Actual</h3>
+              <div className="bg-white rounded-2xl border border-[#fef3c6] shadow p-6">
+                <h3 className="text-sm text-[#973c00]">
+                  Balance Actual
+                </h3>
                 <p
-                  className={`text-2xl font-bold ${
-                    resumen.balance >= 0 ? "text-indigo-600" : "text-red-500"
+                  className={`text-2xl font-bold mt-2 ${
+                    resumen.balance >= 0
+                      ? "text-green-600"
+                      : "text-red-600"
                   }`}
                 >
                   ${resumen.balance.toLocaleString("es-CO")}
@@ -147,17 +180,21 @@ const Dashboard = () => {
             </div>
 
             {/* Gráficos */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-10 mb-10">
-              <div className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-xl font-semibold mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white rounded-2xl border border-[#fef3c6] shadow p-6">
+                <h3 className="text-xl font-semibold text-[#973c00] mb-4">
                   Evolución de ingresos y gastos
                 </h3>
                 <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={datosLineales}>
-                    <XAxis dataKey="fecha" />
-                    <YAxis />
-                    <Tooltip formatter={(value) => `$${value.toLocaleString("es-CO")}`} />
-                    <Legend />
+                  <LineChart data={datosLineales} margin={{ left: -20 }}>
+                    <XAxis dataKey="fecha" tick={{ fill: "#973c00" }} />
+                    <YAxis tick={{ fill: "#973c00" }} />
+                    <Tooltip
+                      formatter={(value) =>
+                        `$${value.toLocaleString("es-CO")}`
+                      }
+                    />
+                    <Legend wrapperStyle={{ color: "#973c00" }} />
                     <Line
                       type="monotone"
                       dataKey="ingresos"
@@ -173,9 +210,8 @@ const Dashboard = () => {
                   </LineChart>
                 </ResponsiveContainer>
               </div>
-
-              <div className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-xl font-semibold mb-4">
+              <div className="bg-white rounded-2xl border border-[#fef3c6] shadow p-6">
+                <h3 className="text-xl font-semibold text-[#973c00] mb-4">
                   Proporción de ingresos vs gastos
                 </h3>
                 <ResponsiveContainer width="100%" height={300}>
@@ -207,51 +243,58 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* Últimas transacciones al final */}
-            {!loading && resumen.transacciones.length > 0 && (
-  <div className="bg-white rounded-lg shadow p-6 mb-10">
-    <h3 className="text-xl font-semibold mb-4">Últimas transacciones</h3>
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="text-left border-b">
-          <th className="py-2">Fecha</th>
-          <th>Descripción</th>
-          <th>Monto</th>
-          <th>Tipo</th>
-        </tr>
-      </thead>
-      <tbody>
-        {resumen.transacciones.map((t, i) => (
-          <tr key={i} className="border-b last:border-none">
-            <td className="py-2">
-              {new Date(t.fecha).toLocaleDateString("es-CO")}
-            </td>
-            <td>{t.descripcion}</td>
-            <td
-              className={`font-semibold ${
-                t.tipo === "Ingreso" ? "text-green-600" : "text-red-600"
-              }`}
-            >
-              ${t.monto.toLocaleString("es-CO")}
-            </td>
-            <td
-              className={`font-medium ${
-                t.tipo === "Ingreso" ? "text-green-500" : "text-red-500"
-              }`}
-            >
-              {t.tipo}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
-)}
+            {/* Tabla de transacciones */}
+            {resumen.transacciones.length > 0 && (
+              <div className="bg-white rounded-2xl border border-[#fef3c6] shadow p-6">
+                <h3 className="text-xl font-semibold text-[#973c00] mb-4">
+                  Últimas transacciones
+                </h3>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[#fef3c6]">
+                      <th className="py-2 text-[#973c00]">Fecha</th>
+                      <th className="text-[#973c00]">Descripción</th>
+                      <th className="text-[#973c00]">Monto</th>
+                      <th className="text-[#973c00]">Tipo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {resumen.transacciones.map((t, i) => (
+                      <tr
+                        key={i}
+                        className="border-b last:border-none border-[#fef3c6]"
+                      >
+                        <td className="py-2">
+                          {new Date(t.fecha).toLocaleDateString("es-CO")}
+                        </td>
+                        <td>{t.descripcion}</td>
+                        <td
+                          className={`font-semibold ${
+                            t.tipo === "Ingreso"
+                              ? "text-green-600"
+                              : "text-red-600"
+                          }`}
+                        >
+                          ${t.monto.toLocaleString("es-CO")}
+                        </td>
+                        <td
+                          className={`font-medium ${
+                            t.tipo === "Ingreso"
+                              ? "text-green-500"
+                              : "text-red-500"
+                          }`}
+                        >
+                          {t.tipo}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </>
         )}
       </div>
     </div>
   );
-};
-
-export default Dashboard;
+}

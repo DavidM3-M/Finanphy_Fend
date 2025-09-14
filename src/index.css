@@ -3,3 +3,11 @@
 @tailwind utilities;
 @import "./styles/variables.css";
 
+/* oculta todos los scrollbars en elementos con .no-scrollbar */
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE y Edge */
+  scrollbar-width: none;     /* Firefox */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;             /* Safari y Chrome */
+}

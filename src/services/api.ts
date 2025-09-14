@@ -5,8 +5,7 @@ import axios from "axios";
 // 1) Base URL dinámica
 const BASE =
   process.env.REACT_APP_API_URL ||
-  "https://finanphy-api.onrender.com"; // Asegúrate que aquí apunte a la API que sirve /incomes y /expenses
-
+  "https://finanphy-api.onrender.com"; 
 console.log("📡 API baseURL =", BASE);
 
 const api = axios.create({
@@ -50,32 +49,46 @@ api.interceptors.response.use(
 
 // 5) Endpoints de aplicación
 
-// Payload para crear movimientos
+// Payload para crear/editar movimientos
 export interface MovimientoPayload {
   amount: number;
-  category: number;      // <— ahora obligatorio
+  category: number;
   supplier: string;
   exitDate: string;
   dueDate: string;
+}
+
+// Tipo de respuesta de un movimiento
+export interface Movimiento {
+  id: number;
+  amount: number;
+  supplier: string;
+  entryDate: string;
+  createdAt: string;
+  companyId?: string;
+  tipo?: "ingreso" | "gasto";
 }
 
 // Lectura
-export const getIncomes = () => api.get("/incomes");
-export const getExpenses = () => api.get("/expenses");
+export const getIncomes = () => api.get<Movimiento[]>("/incomes");
+export const getExpenses = () => api.get<Movimiento[]>("/expenses");
 
-// Payload para crear movimientos (ya no usamos `category`)
-export interface MovimientoPayload {
-  amount: number;
-  supplier: string;
-  exitDate: string;
-  dueDate: string;
-}
-
-// Escritura
+// Creación
 export const createIncome = (data: MovimientoPayload) =>
-  api.post("/incomes", data);
-
+  api.post<Movimiento>("/incomes", data);
 export const createExpense = (data: MovimientoPayload) =>
-  api.post("/expenses", data);
+  api.post<Movimiento>("/expenses", data);
+
+// Actualización
+export const updateIncome = (id: number, data: MovimientoPayload) =>
+  api.put<Movimiento>(`/incomes/${id}`, data);
+export const updateExpense = (id: number, data: MovimientoPayload) =>
+  api.put<Movimiento>(`/expenses/${id}`, data);
+
+// Eliminación
+export const deleteIncome = (id: number) =>
+  api.delete<void>(`/incomes/${id}`);
+export const deleteExpense = (id: number) =>
+  api.delete<void>(`/expenses/${id}`);
 
 export default api;

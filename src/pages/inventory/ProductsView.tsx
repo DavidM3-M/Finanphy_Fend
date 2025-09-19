@@ -1,6 +1,10 @@
 // src/pages/inventory/ProductsView.tsx
+
 import React, { useState, useEffect, ChangeEvent, FormEvent } from "react";
 import { useProducts, Product } from "../../context/ProductsContext";
+import Papa from "papaparse";
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
 
 interface FormState {
   name: string;
@@ -87,16 +91,60 @@ const ProductsView: React.FC = () => {
 
   const filtered = products.filter(p => {
     const term = filter.toLowerCase();
-    return (
-      p.name.toLowerCase().includes(term) ||
-      p.sku.toLowerCase().includes(term)
-    );
+    return p.name.toLowerCase().includes(term) ||
+           p.sku.toLowerCase().includes(term);
   });
+
+  // prepare data for export
+  const getProductsData = () =>
+    filtered.map(p => ({
+      Nombre: p.name,
+      SKU: p.sku,
+      Precio: p.price,
+      Costo: p.cost,
+      Stock: p.stock,
+    }));
+
+  const exportProductsCSV = () => {
+    const data = getProductsData();
+    const csv = Papa.unparse(data);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    saveAs(blob, "productos.csv");
+  };
+
+  const exportProductsExcel = () => {
+    const data = getProductsData();
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Productos");
+    XLSX.writeFile(wb, "productos.xlsx");
+  };
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-6">
-      {/* Columna izquierda: buscador + lista */}
+      {/* Columna izquierda: export buttons + buscador + lista */}
       <div className="space-y-4">
+        <div className="flex gap-4">
+          <button
+            onClick={exportProductsCSV}
+            className="
+              bg-blue-500 hover:bg-blue-600 text-white 
+              rounded px-4 py-2 text-sm
+            "
+          >
+            Exportar CSV
+          </button>
+          <button
+            onClick={exportProductsExcel}
+            className="
+              bg-green-500 hover:bg-green-600 text-white 
+              rounded px-4 py-2 text-sm
+            "
+          >
+            Exportar Excel
+          </button>
+        </div>
+
         <input
           type="text"
           placeholder="Buscar por nombre o SKU…"
@@ -163,28 +211,15 @@ const ProductsView: React.FC = () => {
           {isEditing ? "Editar producto" : "Nuevo producto"}
         </h2>
 
-        {/** Campos **/}
         {[
           { name: "name", label: "Nombre", type: "text" },
           { name: "sku", label: "SKU", type: "text" },
-          {
-            name: "price",
-            label: "Precio",
-            type: "number",
-            step: "0.01",
-          },
-          {
-            name: "cost",
-            label: "Costo",
-            type: "number",
-            step: "0.01",
-          },
-          { name: "stock", label: "Stock", type: "number" },
+          { name: "price", label: "Precio", type: "number", step: "0.01" },
+          { name: "cost", label: "Costo", type: "number", step: "0.01" },
+          { name: "stock", label: "Stock", type: "number" }
         ].map(field => (
           <div className="space-y-1" key={field.name}>
-            <label className="block text-sm text-[#973c00]">
-              {field.label}
-            </label>
+            <label className="block text-sm text-[#973c00]">{field.label}</label>
             <input
               name={field.name}
               type={field.type}

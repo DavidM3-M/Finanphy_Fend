@@ -1,18 +1,18 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
-import "./App.css"; 
+import axios from "axios"; 
+import "./App.css";
 
-// Configuración Axios
+//  Configuración global de Axios
 const api = axios.create({
   baseURL: "http://127.0.0.1:8000", 
   headers: { "Content-Type": "application/json" },
 });
 
 /* ===============================
-   COMPONENTE: MODAL GENÉRICO
+    MODAL REUTILIZABLE
    =============================== */
 function Modal({ isOpen, title, message, onClose, onConfirm }) {
-  if (!isOpen) return null; 
+  if (!isOpen) return null;
 
   return (
     <div className="modal-overlay">
@@ -41,12 +41,11 @@ function Modal({ isOpen, title, message, onClose, onConfirm }) {
 }
 
 /* ===============================
-   SIDEBAR
+    SIDEBAR
    =============================== */
 function Sidebar({ activePage, setActivePage }) {
   const menuItems = [
-    { id: "agregar", label: "Agregar" },
-    { id: "eliminar", label: "Eliminar" },
+    { id: "productos", label: "Productos" },
     { id: "clientes", label: "Clientes" },
   ];
 
@@ -80,7 +79,7 @@ function Sidebar({ activePage, setActivePage }) {
 }
 
 /* ===============================
-   AGREGAR PRODUCTO
+    PRODUCTOS (Agregar + Listar + Eliminar)
    =============================== */
 function Products({ setModal }) {
   const [formData, setFormData] = useState({
@@ -90,10 +89,23 @@ function Products({ setModal }) {
     cost: "",
     stock: "",
   });
+  const [products, setProducts] = useState([]);
 
-  const handleChange = (e) =>
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  // Cargar lista de productos
+  const fetchProducts = async () => {
+    try {
+      const res = await api.get("/products");
+      setProducts(res.data);
+    } catch (error) {
+      console.error(error);
+    }
+  };
 
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  // Agregar producto
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -106,121 +118,25 @@ function Products({ setModal }) {
       setModal({
         open: true,
         title: "Éxito",
-        message: "Producto agregado con éxito",
+        message: "✅ Producto agregado",
       });
       setFormData({ name: "", sku: "", price: "", cost: "", stock: "" });
+      fetchProducts();
     } catch (error) {
-      console.error(error);
       setModal({
         open: true,
         title: "Error",
-        message: "No se pudo agregar el producto",
+        message: " No se pudo agregar",
       });
     }
   };
 
-  return (
-    <div id="page-agregar" className="page active">
-      <h1 className="page-title">Agregar producto</h1>
-      <div className="form-card">
-        <form onSubmit={handleSubmit}>
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Nombre</label>
-              <input
-                type="text"
-                name="name"
-                className="form-input"
-                value={formData.name}
-                onChange={handleChange}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">SKU</label>
-              <input
-                type="text"
-                name="sku"
-                className="form-input"
-                value={formData.sku}
-                onChange={handleChange}
-                required
-              />
-            </div>
-          </div>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Precio</label>
-              <input
-                type="number"
-                name="price"
-                className="form-input"
-                value={formData.price}
-                onChange={handleChange}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Costo</label>
-              <input
-                type="number"
-                name="cost"
-                className="form-input"
-                value={formData.cost}
-                onChange={handleChange}
-                required
-              />
-            </div>
-          </div>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Stock</label>
-              <input
-                type="number"
-                name="stock"
-                className="form-input"
-                value={formData.stock}
-                onChange={handleChange}
-                required
-              />
-            </div>
-          </div>
-
-          <div className="form-buttons">
-            <button type="submit" className="btn btn-primary">
-              Agregar
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-/* ===============================
-   ELIMINAR PRODUCTO
-   =============================== */
-function DeleteProduct({ setModal }) {
-  const [products, setProducts] = useState([]);
-  const [deleteId, setDeleteId] = useState(null);
-
-  const fetchProducts = async () => {
-    try {
-      const res = await api.get("/products");
-      setProducts(res.data);
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
+  // Eliminar producto
   const confirmDelete = (id) => {
-    setDeleteId(id);
     setModal({
       open: true,
       title: "Confirmar",
-      message: "¿Seguro que quieres eliminar este producto?",
+      message: " ¿Seguro que deseas eliminar este producto?",
       confirm: () => handleDelete(id),
     });
   };
@@ -235,22 +151,87 @@ function DeleteProduct({ setModal }) {
         message: "Producto eliminado",
       });
     } catch (error) {
-      console.error(error);
       setModal({
         open: true,
         title: "Error",
-        message: "No se pudo eliminar el producto",
+        message: " No se pudo eliminar",
       });
     }
   };
 
-  useEffect(() => {
-    fetchProducts();
-  }, []);
-
   return (
-    <div id="page-eliminar" className="page">
-      <h1 className="page-title">Eliminar</h1>
+    <div className="page active">
+      <h1 className="page-title">Productos</h1>
+
+      {/* Formulario para agregar */}
+      <div className="form-card">
+        <form onSubmit={handleSubmit}>
+          <div className="form-row">
+            <input
+              type="text"
+              name="name"
+              placeholder="Nombre"
+              className="form-input"
+              value={formData.name}
+              onChange={(e) =>
+                setFormData({ ...formData, name: e.target.value })
+              }
+              required
+            />
+            <input
+              type="text"
+              name="sku"
+              placeholder="SKU"
+              className="form-input"
+              value={formData.sku}
+              onChange={(e) =>
+                setFormData({ ...formData, sku: e.target.value })
+              }
+              required
+            />
+          </div>
+          <div className="form-row">
+            <input
+              type="number"
+              name="price"
+              placeholder="Precio"
+              className="form-input"
+              value={formData.price}
+              onChange={(e) =>
+                setFormData({ ...formData, price: e.target.value })
+              }
+              required
+            />
+            <input
+              type="number"
+              name="cost"
+              placeholder="Costo"
+              className="form-input"
+              value={formData.cost}
+              onChange={(e) =>
+                setFormData({ ...formData, cost: e.target.value })
+              }
+              required
+            />
+            <input
+              type="number"
+              name="stock"
+              placeholder="Stock"
+              className="form-input"
+              value={formData.stock}
+              onChange={(e) =>
+                setFormData({ ...formData, stock: e.target.value })
+              }
+              required
+            />
+          </div>
+          <button type="submit" className="btn btn-primary">
+            Agregar
+          </button>
+        </form>
+      </div>
+
+      {/* Tabla de productos */}
       <div className="table-card">
         <table className="products-table">
           <thead>
@@ -258,6 +239,8 @@ function DeleteProduct({ setModal }) {
               <th>ID</th>
               <th>Nombre</th>
               <th>SKU</th>
+              <th>Precio</th>
+              <th>Stock</th>
               <th>Acciones</th>
             </tr>
           </thead>
@@ -267,6 +250,8 @@ function DeleteProduct({ setModal }) {
                 <td>{p.id}</td>
                 <td>{p.name}</td>
                 <td>{p.sku}</td>
+                <td>{p.price}</td>
+                <td>{p.stock}</td>
                 <td>
                   <button
                     className="eliminate-btn"
@@ -285,7 +270,7 @@ function DeleteProduct({ setModal }) {
 }
 
 /* ===============================
-   CLIENTES
+    CLIENTES (Listar + Registrar)
    =============================== */
 function Clients({ setModal }) {
   const [clients, setClients] = useState([]);
@@ -305,6 +290,10 @@ function Clients({ setModal }) {
     }
   };
 
+  useEffect(() => {
+    fetchClients();
+  }, []);
+
   const handleChange = (e) =>
     setNewClient({ ...newClient, [e.target.name]: e.target.value });
 
@@ -315,104 +304,83 @@ function Clients({ setModal }) {
       setModal({
         open: true,
         title: "Éxito",
-        message: "Cliente registrado con éxito",
+        message: " Cliente registrado",
       });
       fetchClients();
       setNewClient({ firstName: "", lastName: "", email: "", password: "" });
     } catch (error) {
-      console.error(error);
       setModal({
         open: true,
         title: "Error",
-        message: "No se pudo registrar el cliente",
+        message: " No se pudo registrar",
       });
     }
   };
 
-  useEffect(() => {
-    fetchClients();
-  }, []);
-
   return (
-    <div id="page-clientes" className="page">
-      <div className="clients-header">
-        <h1 className="page-title">Clientes</h1>
-      </div>
+    <div className="page">
+      <h1 className="page-title">Clientes</h1>
 
+      {/* Formulario registrar cliente */}
       <div className="form-card">
         <form onSubmit={handleRegister}>
           <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Nombre</label>
-              <input
-                type="text"
-                name="firstName"
-                className="form-input"
-                value={newClient.firstName}
-                onChange={handleChange}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Apellido</label>
-              <input
-                type="text"
-                name="lastName"
-                className="form-input"
-                value={newClient.lastName}
-                onChange={handleChange}
-                required
-              />
-            </div>
+            <input
+              type="text"
+              name="firstName"
+              placeholder="Nombre"
+              className="form-input"
+              value={newClient.firstName}
+              onChange={handleChange}
+              required
+            />
+            <input
+              type="text"
+              name="lastName"
+              placeholder="Apellido"
+              className="form-input"
+              value={newClient.lastName}
+              onChange={handleChange}
+              required
+            />
           </div>
-
           <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Email</label>
-              <input
-                type="email"
-                name="email"
-                className="form-input"
-                value={newClient.email}
-                onChange={handleChange}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Contraseña</label>
-              <input
-                type="password"
-                name="password"
-                className="form-input"
-                value={newClient.password}
-                onChange={handleChange}
-                required
-              />
-            </div>
+            <input
+              type="email"
+              name="email"
+              placeholder="Email"
+              className="form-input"
+              value={newClient.email}
+              onChange={handleChange}
+              required
+            />
+            <input
+              type="password"
+              name="password"
+              placeholder="Contraseña"
+              className="form-input"
+              value={newClient.password}
+              onChange={handleChange}
+              required
+            />
           </div>
-
-          <div className="form-buttons">
-            <button type="submit" className="btn btn-primary">
-              Registrar
-            </button>
-          </div>
+          <button type="submit" className="btn btn-primary">
+            Registrar
+          </button>
         </form>
       </div>
 
+      {/* Lista de clientes */}
       <div className="clients-grid">
         {clients.map((c) => (
           <div key={c.id} className="client-card">
             <div className="client-header">
-              <div>
-                <div className="client-name">
-                  {c.firstName} {c.lastName}
-                </div>
-                <div className="client-id">{c.email}</div>
+              <div className="client-name">
+                {c.firstName} {c.lastName}
               </div>
+              <div className="client-id">{c.email}</div>
             </div>
-            <div className="client-info">
-              <div>📧 {c.email}</div>
-            </div>
+            <div className="client-info">📧 {c.email}</div>
           </div>
         ))}
       </div>
@@ -421,12 +389,11 @@ function Clients({ setModal }) {
 }
 
 /* ===============================
-   APP PRINCIPAL
+    APP PRINCIPAL
    =============================== */
 export default function App() {
-  const [activePage, setActivePage] = useState("agregar");
+  const [activePage, setActivePage] = useState("productos");
 
-  // Estado global de modales
   const [modal, setModal] = useState({
     open: false,
     title: "",
@@ -440,11 +407,9 @@ export default function App() {
     <div className="app-container">
       <Sidebar activePage={activePage} setActivePage={setActivePage} />
       <main className="main-content">
-        {activePage === "agregar" && <Products setModal={setModal} />}
-        {activePage === "eliminar" && <DeleteProduct setModal={setModal} />}
+        {activePage === "productos" && <Products setModal={setModal} />}
         {activePage === "clientes" && <Clients setModal={setModal} />}
       </main>
-
       <Modal
         isOpen={modal.open}
         title={modal.title}

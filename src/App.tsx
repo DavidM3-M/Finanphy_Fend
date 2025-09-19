@@ -4,8 +4,8 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 
 import Login        from "./pages/auth/Login";
 import Register     from "./pages/auth/Register";
-import Unauthorized from "./pages/Unauthorized";
-import NotFound     from "./pages/NotFound";
+import Unauthorized from "./components/Unauthorized";
+import NotFound     from "./components/NotFound";
 
 import ProtectedLayout from "./components/ProtectedLayout";
 import PrivateRoute    from "./components/PrivateRoute";

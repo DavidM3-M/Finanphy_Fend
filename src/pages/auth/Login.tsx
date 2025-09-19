@@ -96,7 +96,7 @@ export default function Login() {
               className="absolute inset-y-0 right-3 flex items-center text-[#bb4d00]
                          hover:text-[#973c00]"
             >
-              {showPass ? "🙈" : "👁️"}
+              {showPass ? "x" : "o"}
             </button>
           </div>
 

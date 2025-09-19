@@ -1,4 +1,3 @@
-// src/App.tsx
 import React from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
@@ -15,9 +14,8 @@ import LoadingSpinner  from "./components/LoadingSpinner";
 import Dashboard     from "./pages/Dashboard";
 import Facturacion   from "./pages/Facturacion";
 import Clasificacion from "./pages/Clasificacion";
-import ReportPage    from "./pages/ReportPage";
+import DailyReports  from "./pages/DailyReports";
 
-// Importamos el contexto y la vista de inventario
 import { ProductsProvider } from "./context/ProductsContext";
 import ProductsView        from "./pages/inventory/ProductsView";
 
@@ -44,49 +42,55 @@ function AppRoutes() {
 
   return (
     <Routes>
+      {/* Públicas */}
       <Route
         path="/"
         element={
           token
-            ? <Navigate to="/app/dashboard" replace />
+            ? <Navigate to="/app" replace />
             : <Navigate to="/auth/login" replace />
         }
       />
-
       <Route
         path="/auth/login"
-        element={token ? <Navigate to="/app/dashboard" replace /> : <Login />}
+        element={token ? <Navigate to="/app" replace /> : <Login />}
       />
       <Route
         path="/auth/register"
-        element={token ? <Navigate to="/app/dashboard" replace /> : <Register />}
+        element={token ? <Navigate to="/app" replace /> : <Register />}
       />
       <Route path="/unauthorized" element={<Unauthorized />} />
 
+      {/* Protegidas bajo /app */}
       <Route
-        path="/app/dashboard"
+        path="/app/*"
         element={
           <PrivateRoute>
             <ProtectedLayout />
           </PrivateRoute>
         }
       >
+        {/* /app → Dashboard */}
         <Route index element={<Dashboard />} />
-        <Route path="facturacion" element={<Facturacion />} />
-        <Route path="reportes"     element={<ReportPage />} />
+        <Route path="dashboard" element={<Dashboard />} />
+
+        {/* Secciones */}
+        <Route path="facturacion"   element={<Facturacion />} />
+        <Route path="inventario"    element={
+          <ProductsProvider>
+            <ProductsView />
+          </ProductsProvider>
+        }/>
         <Route path="clasificacion" element={<Clasificacion />} />
 
-        {/* Nueva ruta de inventario */}
-        <Route
-          path="inventario"
-          element={
-            <ProductsProvider>
-              <ProductsView />
-            </ProductsProvider>
-          }
-        />
+        {/* <-- Aquí */}
+        <Route path="reportes" element={<DailyReports />} />
+
+        {/* Catch-all dentro de /app */}
+        <Route path="*" element={<NotFound />} />
       </Route>
 
+      {/* Catch-all global */}
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

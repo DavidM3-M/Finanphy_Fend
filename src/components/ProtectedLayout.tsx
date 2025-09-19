@@ -9,12 +9,12 @@ export default function ProtectedLayout() {
 
   return (
     <div className="relative min-h-screen bg-[#fffbeb]">
-      {/* Sidebar flotante */}
+      {/* Sidebar */}
       <Sidebar />
 
-      {/* Contenido principal desplazado */}
+      {/* Contenido principal */}
       <main className="ml-80 px-6 py-8">
-        {/* Encabezado */}
+        {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-2xl font-bold text-[#973c00]">
@@ -24,17 +24,13 @@ export default function ProtectedLayout() {
           </div>
           <button
             onClick={logout}
-            className="
-              bg-[#fe9a00] hover:bg-[#e17100]
-              text-white px-4 py-2 rounded-lg shadow
-              transition-colors duration-200
-            "
+            className="bg-[#fe9a00] hover:bg-[#e17100] text-white px-4 py-2 rounded-lg shadow transition-colors duration-200"
           >
             Cerrar sesión
           </button>
         </div>
 
-        {/* Área de rutas */}
+        {/* Aquí se montan las rutas hijas */}
         <div className="space-y-6">
           <Outlet />
         </div>

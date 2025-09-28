@@ -15,6 +15,7 @@ import Dashboard     from "./pages/Dashboard";
 import Facturacion   from "./pages/Facturacion";
 import Clasificacion from "./pages/Clasificacion";
 import DailyReports  from "./pages/DailyReports";
+import Companies     from "./pages/Companies";  
 
 import { ProductsProvider } from "./context/ProductsContext";
 import ProductsView        from "./pages/inventory/ProductsView";
@@ -82,9 +83,8 @@ function AppRoutes() {
           </ProductsProvider>
         }/>
         <Route path="clasificacion" element={<Clasificacion />} />
-
-        {/* <-- Aquí */}
-        <Route path="reportes" element={<DailyReports />} />
+        <Route path="companies"     element={<Companies />} />  
+        <Route path="reportes"      element={<DailyReports />} />
 
         {/* Catch-all dentro de /app */}
         <Route path="*" element={<NotFound />} />

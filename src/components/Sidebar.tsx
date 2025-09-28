@@ -7,6 +7,7 @@ import {
   Package,
   TrendingUp,
   BarChart3,
+  Building,        
   LucideIcon,
 } from "lucide-react";
 
@@ -35,6 +36,12 @@ const menuItems: MenuItem[] = [
     label: "Clasificación",
     icon: TrendingUp,
     description: "Ingresos y gastos",
+  },
+  {
+    path: "/app/companies",      
+    label: "Compañías",
+    icon: Building,               
+    description: "Gestión de empresas",
   },
   {
     path: "/app/reportes",
@@ -90,17 +97,23 @@ const Sidebar: React.FC = () => {
                   to={item.path}
                   className={`
                     group flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200
-                    ${isActive
-                      ? "bg-[#fee685] text-[#e17100]"
-                      : "text-[#973c00] hover:bg-[#fffbeb]"}
+                    ${
+                      isActive
+                        ? "bg-[#fee685] text-[#e17100]"
+                        : "text-[#973c00] hover:bg-[#fffbeb]"
+                    }
                   `}
                 >
-                  <div className={`
-                    flex-shrink-0 p-3 rounded-lg transition-transform duration-200
-                    ${isActive
-                      ? "bg-[#ffb900] scale-105"
-                      : "bg-[#fef3c6] group-hover:scale-105"}
-                  `}>
+                  <div
+                    className={`
+                      flex-shrink-0 p-3 rounded-lg transition-transform duration-200
+                      ${
+                        isActive
+                          ? "bg-[#ffb900] scale-105"
+                          : "bg-[#fef3c6] group-hover:scale-105"
+                      }
+                    `}
+                  >
                     <Icon className="w-6 h-6 text-white" />
                   </div>
                   <div className="flex-1 min-w-0">

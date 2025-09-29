@@ -21,6 +21,20 @@ const MONTH_NAMES_ES = [
   "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"
 ] as const;
 
+// Categorías de gastos
+const CATEGORIA_GASTOS = {
+  50: "Gastos Generales",
+  51: "Servicios Públicos",
+  52: "Alquiler",
+  53: "Suministros de Oficina",
+  54: "Transporte",
+  55: "Alimentación",
+  56: "Mantenimiento",
+  57: "Marketing",
+  58: "Seguros",
+  59: "Otros Gastos"
+} as const;
+
 // Tipo de dominio
 export interface Movimiento {
   id: number;
@@ -29,6 +43,7 @@ export interface Movimiento {
   entryDate: string;    // "YYYY-MM-DD"
   createdAt: string;    // ISO timestamp
   companyId?: string;
+  category?: number;    // Añadimos la categoría
   tipo: "ingreso" | "gasto";
 }
 
@@ -40,6 +55,7 @@ function mapToIngreso(i: any): Movimiento {
     supplier: i.supplier ?? i.description ?? "—",
     entryDate: i.dueDate.slice(0, 10),  // usamos dueDate para la fecha "pura"
     createdAt: i.createdAt,
+    category: i.category,
     tipo: "ingreso",
   };
 }
@@ -51,6 +67,7 @@ function mapToGasto(e: any): Movimiento {
     supplier: e.supplier ?? e.description ?? "—",
     entryDate: e.dueDate.slice(0, 10),
     createdAt: e.createdAt,
+    category: e.category,
     tipo: "gasto",
   };
 }
@@ -65,6 +82,11 @@ const Clasificacion: React.FC = () => {
   const [filtroEmpresa, setFiltroEmpresa] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  
+  // Nuevos filtros para clasificación de gastos
+  const [filtroCategoria, setFiltroCategoria] = useState("");
+  const [filtroNombre, setFiltroNombre] = useState("");
+  const [filtroId, setFiltroId] = useState("");
 
   // formulario
   const [form, setForm] = useState({
@@ -72,6 +94,7 @@ const Clasificacion: React.FC = () => {
     tipo: "ingreso" as "ingreso"|"gasto",
     supplier: "",
     entryDate: "",
+    category: DEFAULT_CATEGORY.ingreso as number,
   });
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState<number|null>(null);
@@ -95,6 +118,14 @@ const Clasificacion: React.FC = () => {
     fetchMovs();
   }, []);
 
+  // Actualizar categoría por defecto cuando cambia el tipo
+  useEffect(() => {
+    setForm(f => ({
+      ...f,
+      category: DEFAULT_CATEGORY[f.tipo] as number
+    }));
+  }, [form.tipo]);
+
   // crear o actualizar movimiento
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -104,7 +135,7 @@ const Clasificacion: React.FC = () => {
     }
     const payload: MovimientoPayload = {
       amount: form.amount,
-      category: DEFAULT_CATEGORY[form.tipo],
+      category: form.category,
       supplier: form.supplier,
       exitDate: form.entryDate,
       dueDate: form.entryDate,
@@ -119,7 +150,13 @@ const Clasificacion: React.FC = () => {
           ? await createIncome(payload)
           : await createExpense(payload);
       }
-      setForm({ amount: 0, tipo: "ingreso", supplier: "", entryDate: "" });
+      setForm({ 
+        amount: 0, 
+        tipo: "ingreso", 
+        supplier: "", 
+        entryDate: "",
+        category: DEFAULT_CATEGORY.ingreso as number
+      });
       setIsEditing(false);
       setEditingId(null);
 
@@ -134,17 +171,27 @@ const Clasificacion: React.FC = () => {
   };
 
   const cancelEdit = () => {
-    setForm({ amount: 0, tipo: "ingreso", supplier: "", entryDate: "" });
+    setForm({ 
+      amount: 0, 
+      tipo: "ingreso", 
+      supplier: "", 
+      entryDate: "",
+      category: DEFAULT_CATEGORY.ingreso as number
+    });
     setIsEditing(false);
     setEditingId(null);
   };
 
-  // filtros
+  // filtros mejorados
   const movimientosFiltrados = movimientos
     .filter(m => filtroTipo === "todos" || m.tipo === filtroTipo)
     .filter(m => !filtroEmpresa || m.companyId?.includes(filtroEmpresa))
     .filter(m => !dateFrom || m.entryDate >= dateFrom)
-    .filter(m => !dateTo   || m.entryDate <= dateTo);
+    .filter(m => !dateTo   || m.entryDate <= dateTo)
+    // Nuevos filtros
+    .filter(m => !filtroCategoria || m.category?.toString() === filtroCategoria)
+    .filter(m => !filtroNombre || m.supplier.toLowerCase().includes(filtroNombre.toLowerCase()))
+    .filter(m => !filtroId || m.id.toString().includes(filtroId));
 
   // agrupar por mes "YYYY-MM"
   const grupos = movimientosFiltrados.reduce<Record<string,Movimiento[]>>((acc, mov) => {
@@ -181,6 +228,7 @@ const Clasificacion: React.FC = () => {
       tipo: selected.tipo,
       supplier: selected.supplier,
       entryDate: selected.entryDate,
+      category: selected.category || DEFAULT_CATEGORY[selected.tipo] as number,
     });
     setIsEditing(true);
     setEditingId(selected.id);
@@ -189,6 +237,17 @@ const Clasificacion: React.FC = () => {
   };
 
   const onCardClick = (mov: Movimiento) => setSelected(mov);
+
+  // Función para limpiar filtros
+  const limpiarFiltros = () => {
+    setDateFrom("");
+    setDateTo("");
+    setFiltroTipo("todos");
+    setFiltroEmpresa("");
+    setFiltroCategoria("");
+    setFiltroNombre("");
+    setFiltroId("");
+  };
 
   return (
     <div className="max-w-5xl mx-auto py-10 px-4 bg-neutral-50">
@@ -251,6 +310,23 @@ const Clasificacion: React.FC = () => {
                   Gasto
                 </label>
               </div>
+              
+              {/* Selector de categoría */}
+              <select
+                value={form.category}
+                onChange={e => setForm(f => ({ ...f, category: Number(e.target.value) }))}
+                className="border p-2 rounded"
+                required
+              >
+                {form.tipo === "gasto" ? (
+                  Object.entries(CATEGORIA_GASTOS).map(([id, nombre]) => (
+                    <option key={id} value={id}>{nombre}</option>
+                  ))
+                ) : (
+                  <option value={10}>Ingresos</option>
+                )}
+              </select>
+              
               <input
                 type="text"
                 placeholder="Proveedor / Descripción"
@@ -263,7 +339,7 @@ const Clasificacion: React.FC = () => {
                 type="date"
                 value={form.entryDate}
                 onChange={e => setForm(f => ({ ...f, entryDate: e.target.value }))}
-                className="border p-2 rounded"
+                className="border p-2 rounded col-span-2"
                 required
               />
             </div>
@@ -285,38 +361,107 @@ const Clasificacion: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* filtros */}
-      <div className="bg-white p-4 rounded-lg shadow mb-8">
-        <div className="flex gap-4">
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={e => setDateFrom(e.target.value)}
-            className="border p-2 rounded"
-          />
-          <input
-            type="date"
-            value={dateTo}
-            onChange={e => setDateTo(e.target.value)}
-            className="border p-2 rounded"
-          />
-          <select
-            value={filtroTipo}
-            onChange={e => setFiltroTipo(e.target.value as any)}
-            className="border p-2 rounded"
-          >
-            <option value="todos">Todos</option>
-            <option value="ingreso">Ingresos</option>
-            <option value="gasto">Gastos</option>
-          </select>
-          <input
-            type="text"
-            placeholder="Filtrar empresa (ID)"
-            value={filtroEmpresa}
-            onChange={e => setFiltroEmpresa(e.target.value)}
-            className="border p-2 rounded"
-          />
+      {/* filtros mejorados */}
+      <div className="bg-white p-6 rounded-lg shadow mb-8">
+        <h3 className="text-lg font-semibold mb-4">Filtros</h3>
+        
+        {/* Primera fila de filtros */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Fecha desde:</label>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={e => setDateFrom(e.target.value)}
+              className="w-full border p-2 rounded"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Fecha hasta:</label>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={e => setDateTo(e.target.value)}
+              className="w-full border p-2 rounded"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Tipo:</label>
+            <select
+              value={filtroTipo}
+              onChange={e => setFiltroTipo(e.target.value as any)}
+              className="w-full border p-2 rounded"
+            >
+              <option value="todos">Todos</option>
+              <option value="ingreso">Ingresos</option>
+              <option value="gasto">Gastos</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Empresa (ID):</label>
+            <input
+              type="text"
+              placeholder="ID de empresa"
+              value={filtroEmpresa}
+              onChange={e => setFiltroEmpresa(e.target.value)}
+              className="w-full border p-2 rounded"
+            />
+          </div>
         </div>
+        
+        {/* Segunda fila de filtros - específicos para clasificación */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Categoría de gasto:</label>
+            <select
+              value={filtroCategoria}
+              onChange={e => setFiltroCategoria(e.target.value)}
+              className="w-full border p-2 rounded"
+            >
+              <option value="">Todas las categorías</option>
+              {Object.entries(CATEGORIA_GASTOS).map(([id, nombre]) => (
+                <option key={id} value={id}>{nombre}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Nombre/Descripción:</label>
+            <input
+              type="text"
+              placeholder="Buscar por nombre"
+              value={filtroNombre}
+              onChange={e => setFiltroNombre(e.target.value)}
+              className="w-full border p-2 rounded"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">ID del gasto:</label>
+            <input
+              type="text"
+              placeholder="Buscar por ID"
+              value={filtroId}
+              onChange={e => setFiltroId(e.target.value)}
+              className="w-full border p-2 rounded"
+            />
+          </div>
+        </div>
+        
+        {/* Botón para limpiar filtros */}
+        <div className="flex justify-end">
+          <button
+            onClick={limpiarFiltros}
+            className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
+          >
+            Limpiar Filtros
+          </button>
+        </div>
+      </div>
+
+      {/* Resumen de resultados */}
+      <div className="bg-blue-50 p-4 rounded-lg mb-6">
+        <p className="text-sm text-blue-700">
+          Mostrando {movimientosFiltrados.length} movimiento(s) de {movimientos.length} total
+        </p>
       </div>
 
       {/* línea de tiempo agrupada */}
@@ -370,6 +515,15 @@ const Clasificacion: React.FC = () => {
         );
       })}
 
+      {/* Mensaje cuando no hay resultados */}
+      {movimientosFiltrados.length === 0 && (
+        <div className="text-center py-12">
+          <p className="text-gray-500 text-lg">
+            No se encontraron movimientos con los filtros aplicados
+          </p>
+        </div>
+      )}
+
       {/* modal de detalles */}
       <AnimatePresence>
         {selected && (
@@ -389,12 +543,28 @@ const Clasificacion: React.FC = () => {
                 Detalles del Movimiento
               </h3>
               <p className="mb-2">
+                <strong>ID:</strong> {selected.id}
+              </p>
+              <p className="mb-2">
+                <strong>Tipo:</strong> {selected.tipo}
+              </p>
+              <p className="mb-2">
+                <strong>Categoría:</strong>{" "}
+                {selected.tipo === "gasto" && selected.category 
+                  ? CATEGORIA_GASTOS[selected.category as keyof typeof CATEGORIA_GASTOS] || `Categoría ${selected.category}`
+                  : "Ingreso"
+                }
+              </p>
+              <p className="mb-2">
                 <strong>Fecha:</strong>{" "}
                 {selected.entryDate.split("-").reverse().join("/")}
               </p>
               <p className="mb-2">
                 <strong>Hora:</strong>{" "}
                 {new Date(selected.createdAt).toLocaleTimeString()}
+              </p>
+              <p className="mb-2">
+                <strong>Monto:</strong> ${selected.amount.toLocaleString()}
               </p>
               <p className="mb-4">
                 <strong>Descripción:</strong> {selected.supplier}

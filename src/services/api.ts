@@ -5,7 +5,7 @@ import axios from "axios";
 // 1) Base URL dinámica
 const BASE =
   process.env.REACT_APP_API_URL ||
-  "https://finanphy-api.onrender.com"; 
+  "https://finanphy-dev-auth.onrender.com"; 
 console.log("📡 API baseURL =", BASE);
 
 const api = axios.create({
@@ -40,8 +40,14 @@ api.interceptors.response.use(
   (resp) => resp,
   (err) => {
     if (err.response?.status === 401) {
-      console.warn("Token inválido o expirado");
-      // Aquí podrías redirigir a /login o disparar tu logout
+      console.warn("🔐 Token inválido o expirado");
+
+      // Limpieza opcional
+      clearAuthToken();
+      localStorage.removeItem("token");
+
+      // Salto al login
+      window.location.href = "/login";
     }
     return Promise.reject(err);
   }

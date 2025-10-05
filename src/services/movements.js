@@ -1,5 +1,5 @@
 // src/services/movements.js
-import api from "./api"; // tu instancia de axios ya configurada
+import api from "./api"; 
 
 /**
  * Obtener los movimientos recientes desde el backend

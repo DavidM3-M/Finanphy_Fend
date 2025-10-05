@@ -6,6 +6,7 @@ const Navbar = () => {
     { path: "/app/dashboard",            label: "Dashboard",      exact: true  },
     { path: "/app/clasificacion",   label: "Clasificación", exact: false },
     { path: "/app/reportes-diarios", label: "Reportes",      exact: false },
+    { path: "/app/orders", label: "Ordenes",      exact: false },
   ];
 
   return (

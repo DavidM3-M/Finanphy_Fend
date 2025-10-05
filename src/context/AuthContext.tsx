@@ -8,7 +8,7 @@ import React, {
 import { loginUser, registerUser } from "../api/auth";
 import { setAuthToken, clearAuthToken } from "../services/api";
 
-// 1) Tipo de usuario
+// Tipo de usuario
 export interface User {
   id: string;
   email: string;
@@ -17,7 +17,7 @@ export interface User {
   lastName: string;
 }
 
-// 2) Payload esperado en el JWT
+// Payload esperado en el JWT
 interface JwtPayload {
   sub: string;
   email: string;
@@ -26,7 +26,7 @@ interface JwtPayload {
   lastName?: string;
 }
 
-// 3) Función para decodificar JWT sin librerías
+// Decodificador de JWT sin librerías
 function decodeJwt<T>(token: string): T {
   try {
     const payload = token.split(".")[1];
@@ -43,15 +43,18 @@ function decodeJwt<T>(token: string): T {
   }
 }
 
-// 4) Firma del contexto
+// Firma del contexto
 interface AuthContextType {
   user: User | null;
   token: string | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (
-    data: { email: string; password: string; firstName: string; lastName: string }
-  ) => Promise<void>;
+  register: (data: {
+    email: string;
+    password: string;
+    firstName: string;
+    lastName: string;
+  }) => Promise<void>;
   logout: () => void;
 }
 
@@ -64,11 +67,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   );
   const [isLoading, setIsLoading] = useState(true);
 
-  // 5) Rehidrata sesión desde token
+  // Rehidrata sesión desde token
   useEffect(() => {
     const initAuth = () => {
       if (token) {
-        setAuthToken(token);
         try {
           const decoded = decodeJwt<JwtPayload>(token);
           setUser({
@@ -78,9 +80,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             firstName: decoded.firstName ?? "",
             lastName: decoded.lastName ?? "",
           });
+          setAuthToken(token); // ✅ inyecta token en Axios
         } catch (err) {
           console.error("Token inválido:", err);
-          logout();
+          logout(); // ✅ limpia token y headers
         }
       }
       setIsLoading(false);
@@ -88,12 +91,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     initAuth();
   }, [token]);
 
-  // 6) Login
+  // Login
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
       const { access_token } = await loginUser({ email, password });
-
       localStorage.setItem("token", access_token);
       setToken(access_token);
       setAuthToken(access_token);
@@ -114,7 +116,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // 7) Registro
+  // Registro
   const register = async (data: {
     email: string;
     password: string;
@@ -124,7 +126,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setIsLoading(true);
     try {
       const { access_token } = await registerUser(data);
-
       localStorage.setItem("token", access_token);
       setToken(access_token);
       setAuthToken(access_token);
@@ -145,12 +146,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // 8) Logout
+  // Logout (sin navigate aquí)
   const logout = () => {
     localStorage.removeItem("token");
     clearAuthToken();
     setToken(null);
     setUser(null);
+    // Redirección debe hacerse desde el componente que llama a logout()
   };
 
   return (
@@ -162,7 +164,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
-// 9) Hook para consumir el contexto
+// Hook para consumir el contexto
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (!context) {

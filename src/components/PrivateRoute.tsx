@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 interface PrivateRouteProps {
@@ -9,14 +9,14 @@ interface PrivateRouteProps {
 
 export default function PrivateRoute({ children, requiredRole }: PrivateRouteProps) {
   const { token, user, isLoading } = useAuth();
+  const location = useLocation();
 
   if (isLoading) {
     return <div className="text-center p-10">Cargando...</div>;
   }
 
-  // 🔁 Corrige la ruta de login
   if (!token || !user) {
-    return <Navigate to="/auth/login" replace />;
+    return <Navigate to="/auth/login" replace state={{ from: location }} />;
   }
 
   if (requiredRole && user.role !== requiredRole) {

@@ -1,23 +1,27 @@
 import React from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import { AuthProvider, useAuth } from "./context/AuthContext";
 
+// Contextos
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import { ProductsProvider } from "./context/ProductsContext";
+
+// Páginas públicas
 import Login        from "./pages/auth/Login";
 import Register     from "./pages/auth/Register";
 import Unauthorized from "./components/Unauthorized";
 import NotFound     from "./components/NotFound";
 
+// Layouts y protección
 import ProtectedLayout from "./components/ProtectedLayout";
 import PrivateRoute    from "./components/PrivateRoute";
 import LoadingSpinner  from "./components/LoadingSpinner";
 
-import Dashboard     from "./pages/Dashboard";
-import Facturacion   from "./pages/Facturacion";
-import Clasificacion from "./pages/Clasificacion";
-import DailyReports  from "./pages/DailyReports";
-
-import { ProductsProvider } from "./context/ProductsContext";
-import ProductsView        from "./pages/inventory/ProductsView";
+// Páginas privadas
+import Dashboard         from "./pages/Dashboard";
+import Facturacion       from "./pages/Facturacion";
+import Clasificacion     from "./pages/Clasificacion";
+import DailyReports      from "./pages/DailyReports";
+import ProductsView      from "./pages/inventory/ProductsView";
 
 export default function App() {
   return (
@@ -42,26 +46,44 @@ function AppRoutes() {
 
   return (
     <Routes>
-      {/* Públicas */}
+      {/* Rutas públicas */}
       <Route
         path="/"
         element={
           token
-            ? <Navigate to="/app" replace />
+            ? <Navigate to="/app/dashboard" replace />
             : <Navigate to="/auth/login" replace />
         }
       />
       <Route
         path="/auth/login"
-        element={token ? <Navigate to="/app" replace /> : <Login />}
+        element={
+          isLoading
+            ? <LoadingSpinner />
+            : <Login />
+        }
       />
       <Route
         path="/auth/register"
-        element={token ? <Navigate to="/app" replace /> : <Register />}
+        element={
+          isLoading
+            ? <LoadingSpinner />
+            : <Register />
+        }
       />
       <Route path="/unauthorized" element={<Unauthorized />} />
 
-      {/* Protegidas bajo /app */}
+      {/* Redirección explícita para /app */}
+      <Route
+        path="/app"
+        element={
+          token
+            ? <Navigate to="/app/dashboard" replace />
+            : <Navigate to="/auth/login" replace />
+        }
+      />
+
+      {/* Rutas protegidas bajo /app */}
       <Route
         path="/app/*"
         element={
@@ -70,23 +92,16 @@ function AppRoutes() {
           </PrivateRoute>
         }
       >
-        {/* /app → Dashboard */}
         <Route index element={<Dashboard />} />
         <Route path="dashboard" element={<Dashboard />} />
-
-        {/* Secciones */}
-        <Route path="facturacion"   element={<Facturacion />} />
-        <Route path="inventario"    element={
+        <Route path="facturacion" element={<Facturacion />} />
+        <Route path="clasificacion" element={<Clasificacion />} />
+        <Route path="reportes" element={<DailyReports />} />
+        <Route path="inventario" element={
           <ProductsProvider>
             <ProductsView />
           </ProductsProvider>
-        }/>
-        <Route path="clasificacion" element={<Clasificacion />} />
-
-        {/* <-- Aquí */}
-        <Route path="reportes" element={<DailyReports />} />
-
-        {/* Catch-all dentro de /app */}
+        } />
         <Route path="*" element={<NotFound />} />
       </Route>
 

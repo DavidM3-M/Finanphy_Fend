@@ -8,6 +8,7 @@ import {
   TrendingUp,
   BarChart3,
   LucideIcon,
+  ClipboardList,
 } from "lucide-react";
 
 interface MenuItem {
@@ -42,6 +43,13 @@ const menuItems: MenuItem[] = [
     icon: BarChart3,
     description: "Análisis y métricas",
   },
+  {
+    path: "/app/orders",
+    label: "Órdenes",
+    icon: ClipboardList,
+    description: "Gestión de pedidos",
+  },
+
 ];
 
 const Sidebar: React.FC = () => {
@@ -139,7 +147,7 @@ const Sidebar: React.FC = () => {
         <p className="text-xs text-[#973c00] font-medium">
           © {new Date().getFullYear()} Finanphy
         </p>
-        <p className="text-xs text-[#bb4d00] mt-1">Versión 2.1.0</p>
+        <p className="text-xs text-[#bb4d00] mt-1">Versión 1.1.5</p>
       </div>
     </aside>
   );

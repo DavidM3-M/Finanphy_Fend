@@ -190,6 +190,13 @@ const Clasificacion: React.FC = () => {
 
   const onCardClick = (mov: Movimiento) => setSelected(mov);
 
+  const mesActualKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+  const claveMes = dateFrom || dateTo || filtroEmpresa ? null : mesActualKey;
+
+  const gruposFiltrados = claveMes
+    ? Object.entries(grupos).filter(([mesKey]) => mesKey === claveMes)
+    : Object.entries(grupos);
+
   return (
     <div className="max-w-5xl mx-auto py-10 px-4 bg-neutral-50">
       <h1 className="text-3xl font-bold text-center mb-8">
@@ -287,7 +294,7 @@ const Clasificacion: React.FC = () => {
 
       {/* filtros */}
       <div className="bg-white p-4 rounded-lg shadow mb-8">
-        <div className="flex gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           <input
             type="date"
             value={dateFrom}
@@ -320,7 +327,7 @@ const Clasificacion: React.FC = () => {
       </div>
 
       {/* línea de tiempo agrupada */}
-      {Object.entries(grupos).map(([mesKey, items]) => {
+      {gruposFiltrados.map(([mesKey, items]) => {
         const [yyyy, mm] = mesKey.split("-");
         const mesNombre = MONTH_NAMES_ES[Number(mm) - 1];
         return (
@@ -329,7 +336,7 @@ const Clasificacion: React.FC = () => {
               {mesNombre.charAt(0).toUpperCase() + mesNombre.slice(1)} {yyyy}
             </h2>
             <div className="relative w-full min-h-[200px]">
-              <div className="absolute left-1/2 top-0 bottom-0 w-1 bg-amber-200 -translate-x-1/2" />
+              <div className="absolute left-1/2 top-0 bottom-0 w-1 bg-amber-200 -translate-x-[49%]" />
               <div className="relative z-10 space-y-8 mt-6 max-h-[70vh] overflow-y-auto">
                 <AnimatePresence>
                   {items
@@ -349,7 +356,7 @@ const Clasificacion: React.FC = () => {
                         onClick={() => onCardClick(mov)}
                       >
                         <div
-                          className={`absolute left-1/2 w-4 h-4 rounded-full border-2 border-white -translate-x-1/2 ${
+                          className={`absolute left-1/2 top-1/2 w-4 h-4 rounded-full border-2 border-white -translate-x-1/2 -translate-y-1/2 ${
                             mov.tipo === "ingreso" ? "bg-green-500" : "bg-red-500"
                           }`}
                         />

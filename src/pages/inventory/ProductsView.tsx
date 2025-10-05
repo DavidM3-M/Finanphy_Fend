@@ -153,8 +153,27 @@ const ProductsView: React.FC = () => {
     }
   };
 
+  const getTotalInventoryValue = () => {
+  return products.reduce((acc, product) => {
+    const price = Number(product.price) || 0;
+    const stock = Number(product.stock) || 0;
+    return acc + price * stock;
+  }, 0);
+};
+
   return (
+    
     <div className="relative p-6 bg-[#fffbeb]">
+      <h3 style={{ fontSize: '1.25rem', fontWeight: 600 }}>
+        📦 Valor total en inventario:{' '}
+        <span style={{ color: '#27ae60' }}>
+          {getTotalInventoryValue().toLocaleString('es-CO', {
+            style: 'currency',
+            currency: 'COP',
+            minimumFractionDigits: 0,
+          })}
+        </span>
+      </h3>
       {/* Export + Filtro + Nuevo */}
       <div className="flex flex-wrap items-center gap-4 mb-6">
         <button
@@ -186,7 +205,7 @@ const ProductsView: React.FC = () => {
 
       {/* Lista paginada */}
       {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
           {Array.from({ length: pageSize }).map((_, i) => (
             <div
               key={i}
@@ -198,16 +217,20 @@ const ProductsView: React.FC = () => {
         <div className="text-red-600">{error}</div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
             {paginated.map((p) => (
               <div
                 key={p.id}
                 onClick={() => openEdit(p)}
-                className="cursor-pointer bg-white rounded-2xl border border-[#fef3c6] shadow p-4 hover:shadow-lg transition"
+                className="cursor-pointer bg-white rounded-2xl border border-[#fef3c6] shadow p-4 hover:shadow-lg transition flex flex-col justify-between h-full"
               >
-                <h3 className="font-semibold text-[#973c00]">{p.name}</h3>
-                <p className="text-sm text-[#bb4d00]">{p.sku}</p>
-                <div className="flex justify-between mt-2">
+                <div className="flex flex-col gap-1">
+                  <h3 className="font-semibold text-[#973c00] text-base sm:text-lg">
+                    {p.name}
+                  </h3>
+                  <p className="text-sm text-[#bb4d00] break-words">{p.sku}</p>
+                </div>
+                <div className="flex justify-between items-center mt-2 text-sm sm:text-base">
                   <span className="text-green-600 font-bold">
                     ${p.price.toLocaleString("es-CO")}
                   </span>
@@ -219,6 +242,7 @@ const ProductsView: React.FC = () => {
               </div>
             ))}
           </div>
+
 
           {/* Controles de paginación */}
           <div className="flex justify-center items-center gap-4 mt-6">

@@ -22,6 +22,7 @@ import Facturacion       from "./pages/Facturacion";
 import Clasificacion     from "./pages/Clasificacion";
 import DailyReports      from "./pages/DailyReports";
 import ProductsView      from "./pages/inventory/ProductsView";
+import Orders from "pages/Orders";
 
 export default function App() {
   return (
@@ -97,6 +98,7 @@ function AppRoutes() {
         <Route path="facturacion" element={<Facturacion />} />
         <Route path="clasificacion" element={<Clasificacion />} />
         <Route path="reportes" element={<DailyReports />} />
+        <Route path="orders" element={<Orders />} />
         <Route path="inventario" element={
           <ProductsProvider>
             <ProductsView />

@@ -5,7 +5,6 @@ const API_BASE = process.env.REACT_APP_API_URL || "https://finanphy.onrender.com
 
 type Company = {
   id?: number | string;
-  uuid?: string;
   tradeName: string;
   legalName?: string;
   companyType?: string;
@@ -29,7 +28,6 @@ export default function Companies() {
 
   const emptyForm: Company = {
     tradeName: "",
-    uuid: "",
     legalName: "",
     companyType: "",
     taxId: "",
@@ -76,7 +74,6 @@ export default function Companies() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Auto-hide toast after 3 seconds
   useEffect(() => {
     if (toast) {
       const timer = setTimeout(() => setToast(null), 3000);
@@ -123,20 +120,9 @@ export default function Companies() {
       setToast("El nombre comercial (tradeName) es requerido.");
       return;
     }
-    if (!isEditing && !form.uuid) {
-      setToast("El campo UUID es requerido.");
-      return;
-    }
 
     try {
       if (!isEditing) {
-        // Validación de duplicados por UUID
-        const resAll = await api.get("/companies");
-        const existe = (resAll.data || []).some((c: any) => c.uuid === form.uuid);
-        if (existe) {
-          setToast("Ya existe una compañía con este UUID.");
-          return;
-        }
         const res = await api.post(`/companies`, form);
         setCompanies((prev) => [res.data, ...prev]);
         setToast("Compañía creada con éxito.");
@@ -227,10 +213,7 @@ export default function Companies() {
 
             <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <div className="text-sm text-gray-600">UUID</div>
-                <div className="font-medium">{c.uuid || "-"}</div>
-
-                <div className="mt-2 text-sm text-gray-600">Nombre legal</div>
+                <div className="text-sm text-gray-600">Nombre legal</div>
                 <div className="font-medium">{c.legalName || "-"}</div>
 
                 <div className="mt-2 text-sm text-gray-600">Tipo</div>
@@ -271,13 +254,6 @@ export default function Companies() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-3 max-h-[70vh] overflow-auto pr-2">
-              {!isEditing && (
-                <div>
-                  <label className="block text-sm">UUID *</label>
-                  <input name="uuid" value={form.uuid} onChange={handleChange} className="w-full border rounded px-2 py-1" />
-                </div>
-              )}
-
               <div>
                 <label className="block text-sm">Nombre comercial (tradeName) *</label>
                 <input name="tradeName" value={form.tradeName} onChange={handleChange} className="w-full border rounded px-2 py-1" />

@@ -47,7 +47,7 @@ api.interceptors.response.use(
       localStorage.removeItem("token");
 
       // Salto al login
-      window.location.href = "/auth/login";
+      window.location.href = "/";
     }
     return Promise.reject(err);
   }

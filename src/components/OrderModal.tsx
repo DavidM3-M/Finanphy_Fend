@@ -143,14 +143,31 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
                           Stock disponible: {item.product.stock}
                         </p>
                         <input
-                          type="number"
-                          min={1}
-                          max={item.product.stock}
-                          value={item.quantity}
-                          onChange={e =>
-                            handleQuantityChange(index, Number(e.target.value))
-                          }
-                          className="border px-2 py-1 rounded mt-2 w-20"
+                        type="number"
+                        min={1}
+                        max={item.product.stock}
+                        value={selected[index].quantity || ""}
+                        onChange={e => {
+                            const raw = e.target.value;
+                            const updated = [...selected];
+
+                            // Si el input está vacío, dejamos que el usuario escriba
+                            if (raw === "") {
+                            updated[index].quantity = 0;
+                            setSelected(updated);
+                            return;
+                            }
+
+                            const parsed = parseInt(raw, 10);
+                            const max = item.product.stock;
+
+                            // Si el número es válido, lo actualizamos
+                            if (!isNaN(parsed)) {
+                            updated[index].quantity = Math.min(Math.max(1, parsed), max);
+                            setSelected(updated);
+                            }
+                        }}
+                        className="border px-2 py-1 rounded mt-2 w-20"
                         />
                       </div>
                       <button

@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
 
 // Contextos
 import { AuthProvider, useAuth } from "./context/AuthContext";
@@ -17,12 +17,28 @@ import PrivateRoute    from "./components/PrivateRoute";
 import LoadingSpinner  from "./components/LoadingSpinner";
 
 // Páginas privadas
-import Dashboard         from "./pages/Dashboard";
-import Facturacion       from "./pages/Facturacion";
-import Clasificacion     from "./pages/Clasificacion";
-import DailyReports      from "./pages/DailyReports";
-import ProductsView      from "./pages/inventory/ProductsView";
-import Orders from "pages/Orders";
+import Dashboard     from "./pages/Dashboard";
+import Facturacion   from "./pages/Facturacion";
+import Clasificacion from "./pages/Clasificacion";
+import DailyReports  from "./pages/DailyReports";
+import ProductsView  from "./pages/inventory/ProductsView";
+import Orders        from "./pages/Orders";
+import CompanyCatalog from "./pages/CompanyCatalog";
+
+// Wrapper para catálogo público
+function PublicCatalogWrapper() {
+  const { companyId } = useParams();
+
+  if (!companyId) {
+    return <div className="p-8 text-center text-red-600 font-bold">Empresa no especificada</div>;
+  }
+
+  return (
+    <ProductsProvider companyId={companyId} publicMode>
+      <CompanyCatalog />
+    </ProductsProvider>
+  );
+}
 
 export default function App() {
   return (
@@ -35,7 +51,7 @@ export default function App() {
 }
 
 function AppRoutes() {
-  const { token, isLoading } = useAuth();
+  const { token, isLoading, company } = useAuth();
 
   if (isLoading) {
     return (
@@ -50,37 +66,22 @@ function AppRoutes() {
       {/* Rutas públicas */}
       <Route
         path="/"
-        element={
-          token
-            ? <Navigate to="/app/dashboard" replace />
-            : <Navigate to="/auth/login" replace />
+        element={token
+          ? <Navigate to="/app/dashboard" replace />
+          : <Navigate to="/auth/login" replace />
         }
       />
-      <Route
-        path="/auth/login"
-        element={
-          isLoading
-            ? <LoadingSpinner />
-            : <Login />
-        }
-      />
-      <Route
-        path="/auth/register"
-        element={
-          isLoading
-            ? <LoadingSpinner />
-            : <Register />
-        }
-      />
+      <Route path="/auth/login" element={<Login />} />
+      <Route path="/auth/register" element={<Register />} />
+      <Route path="/catalogo/:companyId" element={<PublicCatalogWrapper />} />
       <Route path="/unauthorized" element={<Unauthorized />} />
 
       {/* Redirección explícita para /app */}
       <Route
         path="/app"
-        element={
-          token
-            ? <Navigate to="/app/dashboard" replace />
-            : <Navigate to="/auth/login" replace />
+        element={token
+          ? <Navigate to="/app/dashboard" replace />
+          : <Navigate to="/auth/login" replace />
         }
       />
 
@@ -89,7 +90,13 @@ function AppRoutes() {
         path="/app/*"
         element={
           <PrivateRoute>
-            <ProtectedLayout />
+            {company?.id ? (
+              <ProductsProvider companyId={company.id}>
+                <ProtectedLayout />
+              </ProductsProvider>
+            ) : (
+              <LoadingSpinner />
+            )}
           </PrivateRoute>
         }
       >
@@ -99,11 +106,7 @@ function AppRoutes() {
         <Route path="clasificacion" element={<Clasificacion />} />
         <Route path="reportes" element={<DailyReports />} />
         <Route path="orders" element={<Orders />} />
-        <Route path="inventario" element={
-          <ProductsProvider>
-            <ProductsView />
-          </ProductsProvider>
-        } />
+        <Route path="inventario" element={<ProductsView />} />
         <Route path="*" element={<NotFound />} />
       </Route>
 

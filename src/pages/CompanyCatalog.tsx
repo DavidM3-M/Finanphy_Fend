@@ -97,8 +97,8 @@ export default function CompanyCatalog() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg shadow-lg text-center max-w-sm w-full">
             <h3 className="text-lg font-bold mb-4 text-[#973c00]">Catálogo público</h3>
-            <div ref={qrRef}>
-              <QRCode value={url} size={200} />
+            <div ref={qrRef} className="flex justify-center items-center">
+            <QRCode value={url} size={200} />
             </div>
             <p className="mt-2 text-sm text-gray-600 break-all">🔗 Link: {url}</p>
             <div className="mt-4 flex justify-center gap-3">

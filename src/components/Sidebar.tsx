@@ -181,8 +181,8 @@ const Sidebar: React.FC = () => {
               <p className="py-10 text-gray-500">Cargando empresa…</p>
             ) : (
               <>
-                <div ref={qrRef}>
-                  <QRCode value={url} size={200} />
+                <div ref={qrRef} className="flex justify-center items-center">
+                <QRCode value={url} size={200} />
                 </div>
                 <p className="mt-2 text-sm text-gray-600 break-all">{url}</p>
                 <div className="mt-4 flex justify-center gap-3">

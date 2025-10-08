@@ -127,6 +127,19 @@ export default function Companies() {
       return;
     }
 
+    // 🔍 Validar duplicados localmente antes de enviar
+    if (!isEditing) {
+      const exists = companies.some(
+        (c) =>
+          c.tradeName?.trim().toLowerCase() === form.tradeName.trim().toLowerCase() ||
+          (form.taxId && c.taxId === form.taxId)
+      );
+      if (exists) {
+        setToast("⚠️ Ya existe una compañía con ese nombre comercial o NIT.");
+        return;
+      }
+    }
+
     try {
       const payload = Object.fromEntries(Object.entries(form).filter(([_, v]) => v !== ""));
       console.log("📤 Enviando payload:", payload);

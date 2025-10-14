@@ -76,3 +76,29 @@ export interface OrderPayload {
   items: OrderItemPayload[];
 }
 
+// src/types/auth.ts
+export interface CreateCompanyPayload {
+  tradeName: string;
+  legalName: string;
+  companyType: string;
+  taxId: string;
+  taxRegistry?: string;
+  businessPurpose?: string;
+  companyEmail?: string;
+  companyPhone?: string;
+  fiscalAddress?: string;
+  city?: string;
+  state?: string;
+  representativeName?: string;
+  representativeDocument?: string;
+  incorporationDate?: string;
+}
+
+export interface RegisterPayload {
+  firstName: string;
+  lastName: string;
+  email: string;
+  password: string;
+  company: CreateCompanyPayload;
+}
+

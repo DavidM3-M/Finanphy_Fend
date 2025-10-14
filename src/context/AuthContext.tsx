@@ -26,6 +26,32 @@ export interface Company {
   // podés agregar más campos si los vas a usar
 }
 
+/* Nuevo: tipos para payload de registro */
+export interface CreateCompanyPayload {
+  tradeName: string;
+  legalName?: string;
+  companyType?: string;
+  taxId: string;
+  taxRegistry?: string;
+  businessPurpose?: string;
+  companyEmail?: string;
+  companyPhone?: string;
+  fiscalAddress?: string;
+  city?: string;
+  state?: string;
+  representativeName?: string;
+  representativeDocument?: string;
+  incorporationDate?: string;
+}
+
+export interface RegisterPayload {
+  firstName: string;
+  lastName: string;
+  email: string;
+  password: string;
+  company?: CreateCompanyPayload;
+}
+
 interface JwtPayload {
   sub: string;
   email: string;
@@ -40,12 +66,7 @@ interface AuthContextType {
   isLoading: boolean;
   company: Company | null;
   login: (email: string, password: string) => Promise<void>;
-  register: (data: {
-    email: string;
-    password: string;
-    firstName: string;
-    lastName: string;
-  }) => Promise<void>;
+  register: (data: RegisterPayload) => Promise<void>; // ajustado
   logout: () => void;
 }
 
@@ -112,15 +133,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const register = async (data: {
-    email: string;
-    password: string;
-    firstName: string;
-    lastName: string;
-  }) => {
+  /* register ahora acepta RegisterPayload que incluye company opcional */
+  const register = async (data: RegisterPayload) => {
     setIsLoading(true);
     try {
-      const { access_token } = await registerUser(data);
+      const payload = {
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email,
+        password: data.password,
+        company: data.company ?? undefined,
+      };
+      const { access_token } = await registerUser(payload);
       localStorage.setItem("token", access_token);
       setToken(access_token);
       setAuthToken(access_token);

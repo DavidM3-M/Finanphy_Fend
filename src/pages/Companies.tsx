@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
 import axios, { AxiosResponse } from "axios";
 
+
 const API_BASE = process.env.REACT_APP_API_URL || "https://finanphy-dev-auth.onrender.com";
 
 type Company = {
-  id?: number | string;
+  id?: string;
   tradeName: string;
   legalName?: string;
   companyType?: string;
@@ -45,9 +46,9 @@ export default function Companies() {
 
   const [form, setForm] = useState<Company>(emptyForm);
   const [isEditing, setIsEditing] = useState(false);
-  const [editingId, setEditingId] = useState<number | string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [deleteId, setDeleteId] = useState<number | string | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const api = axios.create({
@@ -84,12 +85,34 @@ export default function Companies() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get("/api/companies");
-      console.log("✅ Respuesta del backend:", res);
-      setCompanies(res.data || []);
+      
+      const res = await api.get("/companies/my");
+      const rawData = res.data;
+      let companyArray: Company[] = [];
+
+      if (Array.isArray(rawData)) {
+        companyArray = rawData;
+      } else if (rawData && typeof rawData === 'object') {
+        
+        companyArray = [rawData]; 
+      }
+      
+      setCompanies(companyArray);
     } catch (err: any) {
-      console.error("❌ Error al cargar compañías:", err.response?.data || err.message);
-      setError("No se pudieron cargar las compañías.");
+      console.error("Error al cargar compañías:", err.response?.data || err.message);
+      
+      const status = err.response?.status;
+      let errorMessage = "No se pudieron cargar las compañías.";
+
+      if (status === 404) {
+          errorMessage += " (Error 404: La ruta GET /companies/my no respondió. Verifica token y servidor)";
+      } else if (status === 401 || status === 403) {
+          errorMessage += " (Error 401/403: No Autorizado. El Token es inválido o expiró)";
+      } else {
+          errorMessage += " (Error de Red/Servidor)";
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -103,9 +126,10 @@ export default function Companies() {
   }
 
   function openEdit(c: Company) {
+    if (!c.id) return;
     setForm({ ...c });
     setIsEditing(true);
-    setEditingId(c.id ?? null);
+    setEditingId(c.id);
     setIsModalOpen(true);
   }
 
@@ -127,58 +151,49 @@ export default function Companies() {
       return;
     }
 
-    // 🔍 Validar duplicados localmente antes de enviar
-    if (!isEditing) {
-      const exists = companies.some(
-        (c) =>
-          c.tradeName?.trim().toLowerCase() === form.tradeName.trim().toLowerCase() ||
-          (form.taxId && c.taxId === form.taxId)
-      );
-      if (exists) {
-        setToast("⚠️ Ya existe una compañía con ese nombre comercial o NIT.");
-        return;
-      }
-    }
-
     try {
-      const payload = Object.fromEntries(Object.entries(form).filter(([_, v]) => v !== ""));
-      console.log("📤 Enviando payload:", payload);
+      
+      const payload = Object.fromEntries(
+        Object.entries(form).filter(([key, v]) => key !== 'id' && v !== "" && v !== undefined)
+      );
 
       let res: AxiosResponse<any>;
 
       if (!isEditing) {
-        res = await api.post(`/api/companies`, payload);
+        // POST: /companies
+        res = await api.post(`/companies`, payload);
         setCompanies((prev) => [res.data, ...prev]);
         setToast("Compañía creada con éxito.");
       } else if (isEditing && editingId != null) {
-        res = await api.patch(`/api/companies/${editingId}`, payload);
-        setCompanies((prev) => prev.map((p) => (p.id === editingId ? res.data : p)));
+        // PATCH: /companies/:id
+        res = await api.patch(`/companies/${editingId}`, payload);
+        setCompanies((prev) => 
+          prev.map((p) => (p.id === editingId ? res.data : p))
+        );
         setToast("Cambios guardados correctamente.");
       }
 
       setIsModalOpen(false);
     } catch (err: any) {
       const backendMsg = err.response?.data?.message || err.response?.data?.error;
-
-      if (backendMsg?.toLowerCase().includes("exist") || backendMsg?.includes("existente")) {
-        setToast("⚠️ Ya existe una compañía con ese nombre o NIT.");
-      } else {
-        setToast("Error al guardar la compañía. Revisa la consola para más detalles.");
-      }
-
-      console.error("❌ Error completo al guardar compañía:", err.response?.data || err.message);
+      const displayMsg = backendMsg?.toLowerCase().includes("exist") 
+        ? "⚠️ Ya existe una compañía con ese nombre o NIT."
+        : "Error al guardar la compañía. Revisa la consola (Payload, 401/403 Token).";
+      
+      setToast(displayMsg);
+      console.error("Error completo al guardar compañía:", err.response?.data || err.message);
     }
   }
 
   async function confirmDelete() {
     if (!deleteId) return;
     try {
-      await api.delete(`/api/companies/${deleteId}`);
+      // DELETE: /companies/:id
+      await api.delete(`/companies/${deleteId}`);
       setCompanies((prev) => prev.filter((c) => c.id !== deleteId));
       setDeleteId(null);
       setToast("Compañía eliminada.");
     } catch (err) {
-      console.error("❌ Error al eliminar compañía:", err);
       setToast("Error al eliminar. Revisa la consola.");
     }
   }
@@ -188,16 +203,13 @@ export default function Companies() {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-semibold">Compañías</h1>
         <div>
-          <button
-            onClick={openCreate}
-            className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
-          >
-            Nueva compañía
-          </button>
+          {/* ✅ Botón 'Nueva compañía' eliminado a petición del usuario. */}
           <button
             onClick={fetchCompanies}
-            className="ml-2 px-3 py-2 border rounded"
+            
+            className="px-3 py-2 border rounded" 
             title="Refrescar lista"
+            disabled={loading}
           >
             {loading ? "Cargando..." : "Refrescar"}
           </button>
@@ -212,7 +224,7 @@ export default function Companies() {
 
       <div className="space-y-3">
         {companies.map((c) => (
-          <details key={String(c.id)} className="p-3 border rounded shadow-sm bg-white">
+          <details key={c.id} className="p-3 border rounded shadow-sm bg-white">
             <summary className="flex items-center justify-between cursor-pointer list-none">
               <div>
                 <div className="font-semibold">{c.tradeName || "(Sin nombre)"}</div>
@@ -231,7 +243,7 @@ export default function Companies() {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    setDeleteId(c.id ?? null);
+                    setDeleteId(c.id || null);
                   }}
                   className="px-3 py-1 border rounded text-sm text-red-600"
                 >
@@ -244,13 +256,10 @@ export default function Companies() {
               <div>
                 <div className="text-sm text-gray-600">Nombre legal</div>
                 <div className="font-medium">{c.legalName || "-"}</div>
-
                 <div className="mt-2 text-sm text-gray-600">Tipo</div>
                 <div className="font-medium">{c.companyType || "-"}</div>
-
                 <div className="mt-2 text-sm text-gray-600">NIT / Tax ID</div>
                 <div className="font-medium">{c.taxId || "-"}</div>
-
                 <div className="mt-2 text-sm text-gray-600">Registro tributario</div>
                 <div className="font-medium">{c.taxRegistry || "-"}</div>
               </div>
@@ -260,17 +269,16 @@ export default function Companies() {
                 <div className="font-medium">
                   {c.companyEmail || "-"} • {c.companyPhone || "-"}
                 </div>
-
                 <div className="mt-2 text-sm text-gray-600">Dirección fiscal</div>
                 <div className="font-medium">{c.fiscalAddress || "-"}</div>
-
                 <div className="mt-2 text-sm text-gray-600">Representante</div>
                 <div className="font-medium">
                   {c.representativeName || "-"} ({c.representativeDocument || "-"})
                 </div>
-
                 <div className="mt-2 text-sm text-gray-600">Fecha de constitución</div>
                 <div className="font-medium">{c.incorporationDate || "-"}</div>
+                <div className="mt-2 text-sm text-gray-600">ID (UUID)</div>
+                <div className="font-mono text-xs break-all">{c.id || "N/A"}</div>
               </div>
             </div>
           </details>
@@ -347,7 +355,7 @@ export default function Companies() {
                 <textarea
                   name="businessPurpose"
                   value={form.businessPurpose}
-                  onChange={handleChange as any}
+                  onChange={handleChange}
                   className="w-full border rounded px-2 py-1"
                 />
               </div>

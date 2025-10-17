@@ -1,8 +1,20 @@
-// src/pages/auth/Register.tsx
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "context/AuthContext";
 import { Building2 } from "lucide-react";
+
+/* Primary / Secondary Buttons (mover fuera del componente para estabilidad) */
+const PrimaryButton: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement>> = ({ children, ...p }) => (
+  <button {...p} className="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-[#fe9a00] hover:bg-[#e27100] text-white font-semibold transition disabled:opacity-60">
+    {children}
+  </button>
+);
+
+const SecondaryButton: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement>> = ({ children, ...p }) => (
+  <button {...p} className="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-transparent border border-[#fef3c6] text-[#7b3306] hover:bg-[#fff7e6] font-medium transition">
+    {children}
+  </button>
+);
 
 /**
  * Multi-step register: 0 Perfil, 1 Contraseña, 2 Empresa, 3 Revisar
@@ -10,7 +22,6 @@ import { Building2 } from "lucide-react";
  * - Botones coherentes y redondeados
  * - Barra de robustez con espacio reservado
  */
-
 export default function Register() {
   const { register, isLoading } = useAuth();
   const navigate = useNavigate();
@@ -103,38 +114,101 @@ export default function Register() {
     setErrors((e) => ({ ...e, password: "" }));
   };
 
+  const checkEmailExists = async (value: string) => {
+    if (!validateEmail(value)) return;
+    try {
+      // Ajusta el endpoint si tu API tiene otro path para verificación
+      const res = await fetch(`/api/auth/check-email?email=${encodeURIComponent(value)}`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data?.message) {
+          setErrors((prev) => ({ ...prev, email: data.message }));
+        } else {
+          setErrors((prev) => ({ ...prev, email: "Email no disponible" }));
+        }
+      } else {
+        // disponible -> limpiar error de email si existía
+        setErrors((prev) => ({ ...prev, email: "" }));
+      }
+    } catch {
+      // No bloquear por fallos de red
+    }
+  };
+
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!canNext()) {
-      goNext();
+
+    // Validar todos los pasos antes de enviar
+    const newErrors: { [k: string]: string } = {};
+
+    // Paso 0
+    if (!firstName.trim()) newErrors.firstName = "Nombre requerido";
+    if (!lastName.trim()) newErrors.lastName = "Apellido requerido";
+    if (!validateEmail(email)) newErrors.email = "Email inválido";
+
+    // Paso 1
+    if (!validatePassword(password)) newErrors.password = "8+ chars, mayúscula, minúscula y número";
+    if (password !== confirm) newErrors.confirm = "No coinciden";
+
+    // Paso 2
+    if (!tradeName.trim()) newErrors.tradeName = "Requerido";
+    if (!legalName.trim()) newErrors.legalName = "Requerido";
+    if (!companyType.trim()) newErrors.companyType = "Requerido";
+    if (!taxId.trim()) newErrors.taxId = "Requerido";
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      if (newErrors.firstName || newErrors.lastName || newErrors.email) setStep(0);
+      else if (newErrors.password || newErrors.confirm) setStep(1);
+      else setStep(2);
       return;
     }
+
     const payload = {
       firstName: firstName.trim(),
       lastName: lastName.trim(),
       email: email.trim(),
       password,
-      company: { tradeName: tradeName.trim(), legalName: legalName.trim(), companyType: companyType.trim(), taxId: taxId.trim() },
+      company: {
+        tradeName: tradeName.trim(),
+        legalName: legalName.trim(),
+        companyType: companyType.trim(),
+        taxId: taxId.trim(),
+      },
     };
+
     try {
       await register(payload);
       navigate("/auth/login");
     } catch (err: any) {
-      const message = (err && (err.message || err?.response?.data?.message)) || "Error al registrar";
-      setErrors({ form: message });
+      const resp = err?.response?.data;
+      const message = resp?.message || err?.message || "Error al registrar";
+
+      // Caso común: backend devuelve { errors: { email: 'Ya existe' } } o { field: 'email', message: '...' }
+      const fieldErrors: { [k: string]: string } = {};
+
+      if (resp?.errors && typeof resp.errors === "object") {
+        Object.keys(resp.errors).forEach((k) => {
+          const v = resp.errors[k];
+          fieldErrors[k] = typeof v === "string" ? v : v?.message || String(v);
+        });
+      } else if (resp?.field && resp?.message) {
+        fieldErrors[resp.field] = resp.message;
+      } else if (/email/i.test(message)) {
+        fieldErrors.email = message;
+      }
+
+      // Si backend indicó un error de email, mostrarlo y regresar al paso 0
+      if (fieldErrors.email) {
+        setErrors((prev) => ({ ...prev, ...fieldErrors }));
+        setStep(0);
+        return;
+      }
+
+      // Fallback: mostrar error general sin borrar errores previos
+      setErrors((prev) => ({ ...prev, form: message }));
     }
   };
-
-  const PrimaryButton: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement>> = ({ children, ...p }) => (
-    <button {...p} className="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-[#fe9a00] hover:bg-[#e27100] text-white font-semibold transition disabled:opacity-60">
-      {children}
-    </button>
-  );
-  const SecondaryButton: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement>> = ({ children, ...p }) => (
-    <button {...p} className="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-transparent border border-[#fef3c6] text-[#7b3306] hover:bg-[#fff7e6] font-medium transition">
-      {children}
-    </button>
-  );
 
   return (
     <div className="min-h-screen bg-[#fffbeb] flex items-center justify-center px-4">
@@ -160,7 +234,16 @@ export default function Register() {
               </div>
 
               <div>
-                <input name="email" type="email" placeholder="Correo electrónico" value={email} onChange={(e) => { setEmail(e.target.value); setErrors((s) => ({ ...s, email: "" })); }} required className={`w-full px-4 py-2 rounded-lg bg-[#fffbeb] focus:border-[#fe9a00] focus:ring-2 focus:ring-[#fee685] ${errors.email ? "border-red-500" : "border-[#fef3c6]"}`} />
+                <input
+                  name="email"
+                  type="email"
+                  placeholder="Correo electrónico"
+                  value={email}
+                  onChange={(e) => { setEmail(e.target.value); setErrors((s) => ({ ...s, email: "" })); }}
+                  onBlur={(e) => checkEmailExists(e.target.value)}
+                  required
+                  className={`w-full px-4 py-2 rounded-lg bg-[#fffbeb] focus:border-[#fe9a00] focus:ring-2 focus:ring-[#fee685] ${errors.email ? "border-red-500" : "border-[#fef3c6]"}`}
+                />
                 {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email}</p>}
               </div>
             </div>
@@ -199,8 +282,6 @@ export default function Register() {
                   )}
                 </button>
 
-
-
                 {errors.password && <p className="text-red-500 text-sm mt-1">{errors.password}</p>}
 
                 {/* Barra de robustez reservando espacio */}
@@ -219,7 +300,15 @@ export default function Register() {
               </div>
 
               <div>
-                <input name="confirm" type="password" placeholder="Confirmar contraseña" value={confirm} onChange={(e) => { setConfirm(e.target.value); setErrors((s) => ({ ...s, confirm: "" })); }} required className={`w-full px-4 py-2 rounded-lg bg-[#fffbeb] focus:border-[#fe9a00] focus:ring-2 focus:ring-[#fee685] ${errors.confirm ? "border-red-500" : "border-[#fef3c6]"}`} />
+                <input
+                  name="confirm"
+                  type={showPass ? "text" : "password"}
+                  placeholder="Confirmar contraseña"
+                  value={confirm}
+                  onChange={(e) => { setConfirm(e.target.value); setErrors((s) => ({ ...s, confirm: "" })); }}
+                  required
+                  className={`w-full px-4 py-2 rounded-lg bg-[#fffbeb] focus:border-[#fe9a00] focus:ring-2 focus:ring-[#fee685] ${errors.confirm ? "border-red-500" : "border-[#fef3c6]"}`}
+                />
                 {errors.confirm && <p className="text-red-500 text-sm mt-1">{errors.confirm}</p>}
               </div>
             </div>
@@ -266,7 +355,49 @@ export default function Register() {
                     <p className="text-sm"><strong>Empresa:</strong> {tradeName}</p>
                     <p className="text-sm"><strong>Razón social:</strong> {legalName}</p>
                     <p className="text-sm"><strong>Tipo:</strong> {companyType}</p>
-                    <p className="text-sm"><strong>NIT:</strong> {taxId}</p>
+                    <input
+                      name="taxId"
+                      inputMode="numeric"
+                      pattern="\d*"
+                      value={taxId}
+                      maxLength={20}
+                      onChange={(e) => {
+                        const digits = e.target.value.replace(/\D/g, "");
+                        setTaxId(digits);
+                        setErrors((s) => ({ ...s, taxId: digits === "" ? "Requerido" : "" }));
+                      }}
+                      onKeyDown={(e) => {
+                        const allowedKeys = ["Backspace","Delete","ArrowLeft","ArrowRight","Tab","Enter","Home","End"];
+                        if (allowedKeys.includes(e.key)) return;
+                        if (e.ctrlKey || e.metaKey) return;
+                        if (/^[0-9]$/.test(e.key)) return;
+                        e.preventDefault();
+                        setErrors((s) => ({ ...s, taxId: "Ingrese un registro válido" }));
+                      }}
+                      onPaste={(e) => {
+                        const text = e.clipboardData.getData("text");
+                        if (!/^\d+$/.test(text)) {
+                          e.preventDefault();
+                          const digits = text.replace(/\D/g, "");
+                          const el = e.currentTarget as HTMLInputElement;
+                          const start = el.selectionStart ?? 0;
+                          const end = el.selectionEnd ?? 0;
+                          const newValue = el.value.slice(0, start) + digits + el.value.slice(end);
+                          setTaxId(newValue.replace(/\D/g, ""));
+                          setErrors((s) => ({ ...s, taxId: digits === "" ? "Solo números" : "" }));
+                          requestAnimationFrame(() => {
+                            const pos = start + digits.length;
+                            el.setSelectionRange(pos, pos);
+                          });
+                        }
+                      }}
+                      placeholder="NIT / taxId"
+                      className={`w-full px-4 py-2 rounded-lg bg-[#fffbeb] border ${errors.taxId ? "border-red-500" : "border-[#fef3c6]"} focus:border-[#fe9a00] focus:ring-2 focus:ring-[#fee685]`}
+                    />
+
+                    <div className="mt-1 text-sm" aria-live="polite">
+                      {errors.taxId ? <span className="text-red-500">{errors.taxId}</span> : <span className="text-[#6b4a12]">Ingrese solo números</span>}
+                    </div>
                   </div>
                   <SecondaryButton type="button" onClick={() => setStep(2)}>Editar</SecondaryButton>
                 </div>
@@ -296,16 +427,16 @@ export default function Register() {
             
           </div>
           {/* Enlace para iniciar sesión */}
-<div className="w-full mt-3 text-center">
-  <span className="text-sm text-[#973c00] mr-2">¿Ya tienes cuenta?</span>
-  <button
-    type="button"
-    onClick={() => navigate("/auth/login")}
-    className="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-transparent border border-[#fef3c6] text-[#7b3306] hover:bg-[#fff7e6] font-medium transition"
-  >
-    Inicia sesión
-  </button>
-</div>
+          <div className="w-full mt-3 text-center">
+            <span className="text-sm text-[#973c00] mr-2">¿Ya tienes cuenta?</span>
+            <button
+              type="button"
+              onClick={() => navigate("/auth/login")}
+              className="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-transparent border border-[#fef3c6] text-[#7b3306] hover:bg-[#fff7e6] font-medium transition"
+            >
+              Inicia sesión
+            </button>
+          </div>
         </form>
       </div>
     </div>

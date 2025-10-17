@@ -106,6 +106,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     initAuth();
   }, [token]);
 
+  // dentro de AuthContext.tsx, reemplaza las funciones existentes
+
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
@@ -125,15 +127,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       const res = await api.get("/companies/my");
       setCompany(res.data);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error en login:", err);
-      throw err;
+      const message =
+        err?.response?.data?.message ??
+        err?.response?.data?.error ??
+        err?.response?.data?.detail ??
+        err?.message ??
+        `Credenciales inválidas (${err?.response?.status ?? "unknown"})`;
+      throw new Error(message);
     } finally {
       setIsLoading(false);
     }
   };
 
-  /* register ahora acepta RegisterPayload que incluye company opcional */
   const register = async (data: RegisterPayload) => {
     setIsLoading(true);
     try {
@@ -160,9 +167,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       const res = await api.get("/companies/my");
       setCompany(res.data);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error en registro:", err);
-      throw err;
+      const message =
+        err?.response?.data?.message ??
+        err?.response?.data?.error ??
+        err?.response?.data?.detail ??
+        err?.message ??
+        `Error en registro (${err?.response?.status ?? "unknown"})`;
+      throw new Error(message);
     } finally {
       setIsLoading(false);
     }

@@ -42,12 +42,27 @@ api.interceptors.response.use(
     if (err.response?.status === 401) {
       console.warn("🔐 Token inválido o expirado");
 
-      // Limpieza opcional
+      // Extraer mensaje del backend si existe
+      const msg =
+        err?.response?.data?.message ??
+        err?.response?.data?.error ??
+        err?.response?.data?.detail ??
+        "Sesión expirada. Por favor inicia sesión nuevamente";
+
+      // Persistir mensaje para que Login lo lea tras la redirección
+      try {
+        sessionStorage.setItem("authError", msg);  
+      } catch (e) {
+        console.warn("No se pudo guardar authError en sessionStorage", e);
+      }
+
+      // Limpieza de credenciales locales
       clearAuthToken();
       localStorage.removeItem("token");
 
-      // Salto al login
-      window.location.href = "/";
+      // Redirigir a la página de login incluyendo el mensaje en la query string
+      const encoded = encodeURIComponent(msg);
+      window.location.href = `/auth/login?authError=${encoded}`;
     }
     return Promise.reject(err);
   }

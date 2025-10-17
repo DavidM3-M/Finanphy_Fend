@@ -14,7 +14,6 @@ import { getIncomes, getExpenses } from "../services/api";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 
-// CSV / Excel utils
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
@@ -36,107 +35,113 @@ export interface DailyReportData {
   balance: number;
 }
 
+type TxWithDate = Transaction & { datePart: string };
+
 const DailyReports: React.FC = () => {
   const [reports, setReports] = useState<DailyReportData[]>([]);
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
 
-  // filtros
   const [filterDate, setFilterDate] = useState("");
   const [filterMonth, setFilterMonth] = useState("");
   const [filterYear, setFilterYear] = useState("");
 
-  // comparación
   const [selectedDates, setSelectedDates] = useState<string[]>([]);
   const [showFloatingChart, setShowFloatingChart] = useState(false);
   const [isCompCollapsed, setIsCompCollapsed] = useState(false);
 
-  // 1️⃣ Fetch y agrupar
   useEffect(() => {
     const fetchAndGroup = async () => {
-      const [inRes, exRes] = await Promise.all([getIncomes(), getExpenses()]);
+      try {
+        const [inRes, exRes] = await Promise.all([getIncomes(), getExpenses()]);
 
-      const allTx = [
-        ...inRes.data.map((i: any) => ({
-          time: i.createdAt,
-          amount: parseFloat(i.amount),
-          type: "income" as const,
-          supplier: i.supplier ?? i.description ?? "—",
-          datePart: i.dueDate.slice(0, 10),
-        })),
-        ...exRes.data.map((e: any) => ({
-          time: e.createdAt,
-          amount: parseFloat(e.amount),
-          type: "expense" as const,
-          supplier: e.supplier ?? e.description ?? "—",
-          datePart: e.dueDate.slice(0, 10),
-        })),
-      ] as (Transaction & { datePart: string })[];
+        const safeParseAmount = (v: any) => {
+          const n = Number(v);
+          return Number.isFinite(n) ? n : 0;
+        };
 
-      const grouped: Record<string, Transaction[]> = {};
-      allTx.forEach((tx) => {
-        (grouped[tx.datePart] ||= []).push({
-          time: tx.time,
-          amount: tx.amount,
-          type: tx.type,
-          supplier: tx.supplier,
+        const allTx = [
+          ...inRes.data.map((i: any) => ({
+            time: i.createdAt,
+            amount: safeParseAmount(i.amount),
+            type: "income" as const,
+            supplier: i.supplier ?? i.description ?? "—",
+            datePart: String(i.dueDate ?? "").slice(0, 10),
+          })),
+          ...exRes.data.map((e: any) => ({
+            time: e.createdAt,
+            amount: safeParseAmount(e.amount),
+            type: "expense" as const,
+            supplier: e.supplier ?? e.description ?? "—",
+            datePart: String(e.dueDate ?? "").slice(0, 10),
+          })),
+        ] as TxWithDate[];
+
+        const grouped: Record<string, Transaction[]> = {};
+        allTx.forEach((tx) => {
+          if (!tx.datePart || tx.datePart.length < 4) return;
+          (grouped[tx.datePart] ||= []).push({
+            time: tx.time,
+            amount: tx.amount,
+            type: tx.type,
+            supplier: tx.supplier,
+          });
         });
-      });
 
-      const dr = Object.entries(grouped)
-        .map(([date, txs]) => {
-          const incomesTotal = txs
-            .filter((t) => t.type === "income")
-            .reduce((sum, t) => sum + t.amount, 0);
-          const expensesTotal = txs
-            .filter((t) => t.type === "expense")
-            .reduce((sum, t) => sum + t.amount, 0);
-          return {
-            date,
-            transactions: txs,
-            incomesTotal,
-            expensesTotal,
-            balance: incomesTotal - expensesTotal,
-          } as DailyReportData;
-        })
-        .sort((a, b) => b.date.localeCompare(a.date));
+        const dr = Object.entries(grouped)
+          .map(([date, txs]) => {
+            const incomesTotal = txs
+              .filter((t) => t.type === "income")
+              .reduce((sum, t) => sum + (t.amount ?? 0), 0);
+            const expensesTotal = txs
+              .filter((t) => t.type === "expense")
+              .reduce((sum, t) => sum + (t.amount ?? 0), 0);
+            return {
+              date,
+              transactions: txs,
+              incomesTotal,
+              expensesTotal,
+              balance: incomesTotal - expensesTotal,
+            } as DailyReportData;
+          })
+          .sort((a, b) => b.date.localeCompare(a.date));
 
-      setReports(dr);
+        setReports(dr);
+      } catch (err) {
+        console.error("Error fetching reports:", err);
+        setReports([]);
+      }
     };
 
     fetchAndGroup();
   }, []);
 
-  // 2️⃣ Preprocesar UI
   const displayReports = useMemo(() => {
     return reports.map((r) => {
-      const formattedDate = format(parseISO(r.date), "dd/MM/yyyy", {
-        locale: es,
-      });
-      const transactionsWithTime = r.transactions
-        .map((tx) => ({
-          timePart: format(parseISO(tx.time), "HH:mm:ss"),
-          amount: tx.amount,
-        }))
-        .sort((a, b) => (a.timePart < b.timePart ? -1 : 1));
+      let formattedDate = r.date;
+      try {
+        formattedDate = format(parseISO(r.date), "dd/MM/yyyy", { locale: es });
+      } catch {}
+      const transactionsWithTime =
+        r.transactions
+          .map((tx) => {
+            let timePart = tx.time;
+            try {
+              timePart = format(parseISO(tx.time), "HH:mm:ss");
+            } catch {}
+            return { timePart, amount: tx.amount ?? 0 };
+          })
+          .sort((a, b) => (a.timePart < b.timePart ? -1 : 1)) ?? [];
       return { ...r, formattedDate, transactionsWithTime };
     });
   }, [reports]);
 
-  // 3️⃣ Filtrar
   const filteredReports = useMemo(() => {
-    if (filterDate) {
-      return displayReports.filter((r) => r.date === filterDate);
-    }
-    if (filterMonth) {
-      return displayReports.filter((r) => r.date.startsWith(filterMonth));
-    }
-    if (filterYear) {
-      return displayReports.filter((r) => r.date.slice(0, 4) === filterYear);
-    }
+    if (filterDate) return displayReports.filter((r) => r.date === filterDate);
+    if (filterMonth) return displayReports.filter((r) => r.date.startsWith(filterMonth));
+    if (filterYear) return displayReports.filter((r) => r.date.slice(0, 4) === filterYear);
     return displayReports;
   }, [displayReports, filterDate, filterMonth, filterYear]);
 
-  // 4️⃣ Datos de comparación
   const compareData = useMemo(() => {
     if (selectedDates.length !== 2) return [];
     const [d1, d2] = selectedDates;
@@ -146,19 +151,19 @@ const DailyReports: React.FC = () => {
 
     const times = Array.from(
       new Set([
-        ...rep1.transactionsWithTime!.map((t) => t.timePart),
-        ...rep2.transactionsWithTime!.map((t) => t.timePart),
+        ...((rep1.transactionsWithTime ?? []).map((t) => t.timePart) || []),
+        ...((rep2.transactionsWithTime ?? []).map((t) => t.timePart) || []),
       ])
     ).sort();
 
     return times.map((t) => ({
       time: t,
       [d1]:
-        rep1.transactionsWithTime!.find((x) => x.timePart === t)?.amount ??
-        0,
+        (rep1.transactionsWithTime ?? []).find((x) => x.timePart === t)
+          ?.amount ?? 0,
       [d2]:
-        rep2.transactionsWithTime!.find((x) => x.timePart === t)?.amount ??
-        0,
+        (rep2.transactionsWithTime ?? []).find((x) => x.timePart === t)
+          ?.amount ?? 0,
     }));
   }, [selectedDates, displayReports]);
 
@@ -176,13 +181,12 @@ const DailyReports: React.FC = () => {
     setFilterYear("");
   };
 
-  // ── EXPORTACIÓN ─────────────────────────────────────────────────────────
   const getSummaryData = () =>
     filteredReports.map((r) => ({
-      Fecha: r.formattedDate,
-      Ingresos: r.incomesTotal,
-      Gastos: r.expensesTotal,
-      Balance: r.balance,
+      Fecha: r.formattedDate ?? r.date,
+      Ingresos: r.incomesTotal ?? 0,
+      Gastos: r.expensesTotal ?? 0,
+      Balance: r.balance ?? 0,
     }));
 
   const exportSummaryCSV = () => {
@@ -200,7 +204,6 @@ const DailyReports: React.FC = () => {
 
   return (
     <div className="space-y-6 p-4 max-w-4xl mx-auto relative">
-      {/* ── BOTONES DE EXPORT, juntos arriba de filtros ───── */}
       <div className="flex gap-4 mb-6">
         <button
           onClick={exportSummaryCSV}
@@ -216,7 +219,6 @@ const DailyReports: React.FC = () => {
         </button>
       </div>
 
-      {/* ── FILTROS ───────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-4 mb-6">
         <div>
           <label className="block text-sm mb-1">Fecha exacta</label>
@@ -272,11 +274,7 @@ const DailyReports: React.FC = () => {
             showFloatingChart
               ? "bg-blue-600 text-white"
               : "bg-blue-100 text-blue-700 hover:bg-blue-200"
-          } ${
-            selectedDates.length !== 2
-              ? "opacity-50 cursor-not-allowed"
-              : ""
-          }`}
+          } ${selectedDates.length !== 2 ? "opacity-50 cursor-not-allowed" : ""}`}
           onClick={() => {
             setIsCompCollapsed(false);
             setShowFloatingChart((v) => !v);
@@ -286,7 +284,6 @@ const DailyReports: React.FC = () => {
         </button>
       </div>
 
-      {/* ── LISTA DE REPORTES DIARIOS ────────────────────────── */}
       {filteredReports.map((r) => {
         const isOpen = expandedDate === r.date;
         const isSelected = selectedDates.includes(r.date);
@@ -306,19 +303,37 @@ const DailyReports: React.FC = () => {
                   type="checkbox"
                   checked={isSelected}
                   onChange={() => toggleDate(r.date)}
+                  onClick={(e) => e.stopPropagation()}
                   className="h-4 w-4"
                 />
-                <h3 className="text-lg font-semibold">
-                  {r.formattedDate}
-                </h3>
+                <h3 className="text-lg font-semibold">{r.formattedDate}</h3>
               </div>
-              <span
-                className={`transform transition-transform ${
-                  isOpen ? "rotate-90" : "rotate-0"
-                }`}
-              >
-                ▶
-              </span>
+
+              <div>
+                <button
+                  aria-expanded={isOpen}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpandedDate(isOpen ? null : r.date);
+                  }}
+                  className={`transform transition-transform duration-200 inline-flex items-center justify-center w-8 h-8 ${
+                    isOpen ? "rotate-90" : "rotate-0"
+                  }`}
+                  title={isOpen ? "Colapsar" : "Expandir"}
+                >
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    className="text-gray-600"
+                  >
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                </button>
+              </div>
             </header>
 
             <AnimatePresence initial={false}>
@@ -333,13 +348,7 @@ const DailyReports: React.FC = () => {
                   <div className="flex justify-between mb-4 text-sm">
                     <p>Ingresos: ${r.incomesTotal.toFixed(2)}</p>
                     <p>Gastos: ${r.expensesTotal.toFixed(2)}</p>
-                    <p
-                      className={
-                        r.balance >= 0
-                          ? "text-green-600"
-                          : "text-red-600"
-                      }
-                    >
+                    <p className={r.balance >= 0 ? "text-green-600" : "text-red-600"}>
                       Balance: ${r.balance.toFixed(2)}
                     </p>
                   </div>
@@ -354,9 +363,7 @@ const DailyReports: React.FC = () => {
                           height={60}
                         />
                         <YAxis />
-                        <Tooltip
-                          formatter={(v: number) => `$${v.toFixed(2)}`}
-                        />
+                        <Tooltip formatter={(v: number) => `$${v.toFixed(2)}`} />
                         <Line
                           type="monotone"
                           dataKey="amount"
@@ -376,7 +383,6 @@ const DailyReports: React.FC = () => {
         );
       })}
 
-      {/* ── COMPARATIVO FLOTANTE ───────────────────────────────── */}
       <AnimatePresence>
         {showFloatingChart && selectedDates.length === 2 && (
           <motion.div
@@ -397,10 +403,7 @@ const DailyReports: React.FC = () => {
                 >
                   {isCompCollapsed ? "+" : "−"}
                 </button>
-                <button
-                  className="text-sm px-2"
-                  onClick={() => setShowFloatingChart(false)}
-                >
+                <button className="text-sm px-2" onClick={() => setShowFloatingChart(false)}>
                   ✕
                 </button>
               </div>

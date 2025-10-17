@@ -335,73 +335,233 @@ function CompanyEditForm({
     }
   }
 
-  return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-1 gap-2">
-        <label className="text-xs text-gray-600">Nombre público</label>
-        <input className="w-full px-2 py-2 border rounded" value={form.tradeName ?? ""} onChange={e => setField("tradeName", e.target.value)} />
+return (
+  <div className="space-y-3">
+    <div className="grid grid-cols-1 gap-2">
+      <label className="text-xs text-gray-600">Nombre público</label>
+      <input
+        className="w-full px-2 py-2 border rounded"
+        value={form.tradeName ?? ""}
+        onChange={e => setField("tradeName", e.target.value)}
+      />
 
-        <label className="text-xs text-gray-600">Razón social</label>
-        <input className="w-full px-2 py-2 border rounded" value={form.legalName ?? ""} onChange={e => setField("legalName", e.target.value)} />
+      <label className="text-xs text-gray-600">Razón social</label>
+      <input
+        className="w-full px-2 py-2 border rounded"
+        value={form.legalName ?? ""}
+        onChange={e => setField("legalName", e.target.value)}
+      />
 
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="text-xs text-gray-600">Tipo</label>
-            <input className="w-full px-2 py-2 border rounded" value={form.companyType ?? ""} onChange={e => setField("companyType", e.target.value)} />
-          </div>
-          <div>
-            <label className="text-xs text-gray-600">NIT</label>
-            <input className="w-full px-2 py-2 border rounded" value={form.taxId ?? ""} onChange={e => setField("taxId", e.target.value)} />
-          </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-xs text-gray-600">Tipo</label>
+          <input
+            className="w-full px-2 py-2 border rounded"
+            value={form.companyType ?? ""}
+            onChange={e => setField("companyType", e.target.value)}
+          />
         </div>
-
-        <label className="text-xs text-gray-600">Tax Registry</label>
-        <input className="w-full px-2 py-2 border rounded" value={form.taxRegistry ?? ""} onChange={e => setField("taxRegistry", e.target.value)} />
-
-        <label className="text-xs text-gray-600">Objeto social / Business purpose</label>
-        <textarea className="w-full px-2 py-2 border rounded" value={form.businessPurpose ?? ""} onChange={e => setField("businessPurpose", e.target.value)} rows={3} />
-
-        <label className="text-xs text-gray-600">Email</label>
-        <input className="w-full px-2 py-2 border rounded" value={form.companyEmail ?? ""} onChange={e => setField("companyEmail", e.target.value)} />
-
-        <label className="text-xs text-gray-600">Teléfono</label>
-        <input className="w-full px-2 py-2 border rounded" value={form.companyPhone ?? ""} onChange={e => setField("companyPhone", e.target.value)} />
-
-        <label className="text-xs text-gray-600">Dirección fiscal</label>
-        <input className="w-full px-2 py-2 border rounded" value={form.fiscalAddress ?? ""} onChange={e => setField("fiscalAddress", e.target.value)} />
-
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="text-xs text-gray-600">Ciudad</label>
-            <input className="w-full px-2 py-2 border rounded" value={form.city ?? ""} onChange={e => setField("city", e.target.value)} />
-          </div>
-          <div>
-            <label className="text-xs text-gray-600">Departamento</label>
-            <input className="w-full px-2 py-2 border rounded" value={form.state ?? ""} onChange={e => setField("state", e.target.value)} />
-          </div>
+        <div>
+          <label className="text-xs text-gray-600">NIT</label>
+          <input
+            className="w-full px-2 py-2 border rounded"
+            value={form.taxId ?? ""}
+            inputMode="numeric"
+            pattern="\d*"
+            onBeforeInput={(e) => {
+              const ne = e.nativeEvent;
+              const data = (ne && 'data' in ne) ? (ne).data ?? '' : '';
+              if (data && /\D/.test(data)) {
+                try { (ne as any).preventDefault(); } catch {}
+                e.preventDefault();
+              }
+            }}
+            onKeyDown={(e) => {
+              const allowed = ["Backspace","Delete","ArrowLeft","ArrowRight","Tab","Enter","Home","End"];
+              if (allowed.includes(e.key)) return;
+              if (e.ctrlKey || e.metaKey) return;
+              if (!/^[0-9]$/.test(e.key)) e.preventDefault();
+            }}
+            onPaste={(e) => {
+              const text = e.clipboardData.getData("text") || "";
+              if (!/^\d+$/.test(text)) {
+                e.preventDefault();
+                const digits = text.replace(/\D/g, "");
+                if (!digits) return;
+                const el = e.currentTarget;
+                const start = el.selectionStart ?? 0;
+                const end = el.selectionEnd ?? 0;
+                const newValue = el.value.slice(0, start) + digits + el.value.slice(end);
+                setField("taxId", newValue.replace(/\D/g, ""));
+                requestAnimationFrame(() => {
+                  const pos = start + digits.length;
+                  el.setSelectionRange(pos, pos);
+                });
+              }
+            }}
+            onChange={(e) => setField("taxId", e.target.value.replace(/\D/g, ""))}
+          />
         </div>
-
-        <label className="text-xs text-gray-600">Representante legal</label>
-        <input className="w-full px-2 py-2 border rounded" value={form.representativeName ?? ""} onChange={e => setField("representativeName", e.target.value)} />
-
-        <label className="text-xs text-gray-600">Documento representante</label>
-        <input className="w-full px-2 py-2 border rounded" value={form.representativeDocument ?? ""} onChange={e => setField("representativeDocument", e.target.value)} />
-
-        <label className="text-xs text-gray-600">Fecha de constitución</label>
-        <input
-          type="date"
-          className="w-full px-2 py-2 border rounded"
-          value={form.incorporationDate ? (String(form.incorporationDate).length > 10 ? String(form.incorporationDate).slice(0,10) : String(form.incorporationDate)) : ""}
-          onChange={e => setField("incorporationDate", e.target.value)}
-        />
       </div>
 
-      <div className="flex items-center justify-end gap-2 pt-2">
-        {error && <div className="text-xs text-red-600 mr-auto">{error}</div>}
-        {success && <div className="text-xs text-green-600 mr-auto">{success}</div>}
-        <button onClick={onCancel} className="px-3 py-1 bg-gray-100 rounded">Cancelar</button>
-        <button onClick={handleSave} disabled={saving} className="px-3 py-1 bg-green-600 text-white rounded">{saving ? "Guardando..." : "Guardar"}</button>
+      <label className="text-xs text-gray-600">Tax Registry</label>
+      <input
+        className="w-full px-2 py-2 border rounded"
+        value={form.taxRegistry ?? ""}
+        inputMode="numeric"
+        pattern="\d*"
+        onBeforeInput={(e) => {
+          const ne = e.nativeEvent;
+          const data = (ne && 'data' in ne) ? (ne).data ?? '' : '';
+          if (data && /\D/.test(data)) {
+            try { (ne as any).preventDefault(); } catch {}
+            e.preventDefault();
+          }
+        }}
+        onKeyDown={(e) => {
+          const allowed = ["Backspace","Delete","ArrowLeft","ArrowRight","Tab","Enter","Home","End"];
+          if (allowed.includes(e.key)) return;
+          if (e.ctrlKey || e.metaKey) return;
+          if (!/^[0-9]$/.test(e.key)) e.preventDefault();
+        }}
+        onPaste={(e) => {
+          const text = e.clipboardData.getData("text") || "";
+          if (!/^\d+$/.test(text)) {
+            e.preventDefault();
+            const digits = text.replace(/\D/g, "");
+            if (!digits) return;
+            const el = e.currentTarget;
+            const start = el.selectionStart ?? 0;
+            const end = el.selectionEnd ?? 0;
+            const newValue = el.value.slice(0, start) + digits + el.value.slice(end);
+            setField("taxRegistry", newValue.replace(/\D/g, ""));
+            requestAnimationFrame(() => {
+              const pos = start + digits.length;
+              el.setSelectionRange(pos, pos);
+            });
+          }
+        }}
+        onChange={(e) => setField("taxRegistry", e.target.value.replace(/\D/g, ""))}
+      />
+
+      <label className="text-xs text-gray-600">Objeto social / Business purpose</label>
+      <textarea
+        className="w-full px-2 py-2 border rounded"
+        value={form.businessPurpose ?? ""}
+        onChange={e => setField("businessPurpose", e.target.value)}
+        rows={3}
+      />
+
+      <label className="text-xs text-gray-600">Email</label>
+      <input
+        className="w-full px-2 py-2 border rounded"
+        value={form.companyEmail ?? ""}
+        onChange={e => setField("companyEmail", e.target.value)}
+      />
+
+      <label className="text-xs text-gray-600">Teléfono</label>
+      <input
+        className="w-full px-2 py-2 border rounded"
+        value={form.companyPhone ?? ""}
+        onChange={e => setField("companyPhone", e.target.value)}
+      />
+
+      <label className="text-xs text-gray-600">Dirección fiscal</label>
+      <input
+        className="w-full px-2 py-2 border rounded"
+        value={form.fiscalAddress ?? ""}
+        onChange={e => setField("fiscalAddress", e.target.value)}
+      />
+
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-xs text-gray-600">Ciudad</label>
+          <input
+            className="w-full px-2 py-2 border rounded"
+            value={form.city ?? ""}
+            onChange={e => setField("city", e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="text-xs text-gray-600">Departamento</label>
+          <input
+            className="w-full px-2 py-2 border rounded"
+            value={form.state ?? ""}
+            onChange={e => setField("state", e.target.value)}
+          />
+        </div>
       </div>
+
+      <label className="text-xs text-gray-600">Representante legal</label>
+      <input
+        className="w-full px-2 py-2 border rounded"
+        value={form.representativeName ?? ""}
+        onChange={e => setField("representativeName", e.target.value)}
+      />
+
+      <label className="text-xs text-gray-600">Documento representante</label>
+      <input
+        className="w-full px-2 py-2 border rounded"
+        value={form.representativeDocument ?? ""}
+        inputMode="numeric"
+        pattern="\d*"
+        onBeforeInput={(e) => {
+          const ne = e.nativeEvent;
+          const data = (ne && 'data' in ne) ? (ne).data ?? '' : '';
+          if (data && /\D/.test(data)) {
+            try { (ne as any).preventDefault(); } catch {}
+            e.preventDefault();
+          }
+        }}
+        onKeyDown={(e) => {
+          const allowed = ["Backspace","Delete","ArrowLeft","ArrowRight","Tab","Enter","Home","End"];
+          if (allowed.includes(e.key)) return;
+          if (e.ctrlKey || e.metaKey) return;
+          if (!/^[0-9]$/.test(e.key)) e.preventDefault();
+        }}
+        onPaste={(e) => {
+          const text = e.clipboardData.getData("text") || "";
+          if (!/^\d+$/.test(text)) {
+            e.preventDefault();
+            const digits = text.replace(/\D/g, "");
+            if (!digits) return;
+            const el = e.currentTarget;
+            const start = el.selectionStart ?? 0;
+            const end = el.selectionEnd ?? 0;
+            const newValue = el.value.slice(0, start) + digits + el.value.slice(end);
+            setField("representativeDocument", newValue.replace(/\D/g, ""));
+            requestAnimationFrame(() => {
+              const pos = start + digits.length;
+              el.setSelectionRange(pos, pos);
+            });
+          }
+        }}
+        onChange={(e) => setField("representativeDocument", e.target.value.replace(/\D/g, ""))}
+      />
+
+      <label className="text-xs text-gray-600">Fecha de constitución</label>
+      <input
+        type="date"
+        className="w-full px-2 py-2 border rounded"
+        value={
+          form.incorporationDate
+            ? (String(form.incorporationDate).length > 10
+                ? String(form.incorporationDate).slice(0, 10)
+                : String(form.incorporationDate))
+            : ""
+        }
+        onChange={e => setField("incorporationDate", e.target.value)}
+      />
     </div>
-  );
+
+    <div className="flex items-center justify-end gap-2 pt-2">
+      {error && <div className="text-xs text-red-600 mr-auto">{error}</div>}
+      {success && <div className="text-xs text-green-600 mr-auto">{success}</div>}
+      <button onClick={onCancel} className="px-3 py-1 bg-gray-100 rounded">Cancelar</button>
+      <button onClick={handleSave} disabled={saving} className="px-3 py-1 bg-green-600 text-white rounded">
+        {saving ? "Guardando..." : "Guardar"}
+      </button>
+    </div>
+  </div>
+);
 }

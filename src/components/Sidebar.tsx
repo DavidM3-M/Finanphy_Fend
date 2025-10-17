@@ -39,7 +39,7 @@ export default function Sidebar(): React.ReactElement {
   const [companyError, setCompanyError] = useState<string | null>(null);
 
   const companyLoading = !company && !companyId;
-  const url = `https://finanphy.netlify.app/catalogo/${companyId || ""}`;
+  const url = `https://finanphy.vercel.app/catalogo/${companyId || ""}`;
 
   async function fetchText(input: RequestInfo, init?: RequestInit) {
     const res = await fetch(input, init);

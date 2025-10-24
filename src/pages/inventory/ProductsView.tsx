@@ -57,7 +57,13 @@ const ProductsView: React.FC = () => {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    loadProducts();
+    // load initially and log result
+    const load = async () => {
+      await loadProducts();
+      console.log("products loaded (initial)", products.map(p => ({ id: p.id, imageUrl: (p as any).imageUrl })));
+    };
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadProducts]);
 
   useEffect(() => {
@@ -86,7 +92,8 @@ const ProductsView: React.FC = () => {
       products.filter((p) => {
         const term = filter.toLowerCase();
         return (
-          p.name.toLowerCase().includes(term) || p.sku.toLowerCase().includes(term)
+          p.name.toLowerCase().includes(term) ||
+          p.sku.toLowerCase().includes(term)
         );
       }),
     [products, filter]
@@ -105,9 +112,9 @@ const ProductsView: React.FC = () => {
       Precio: p.price,
       Costo: p.cost,
       Stock: p.stock,
-      Descripción: p.description,
-      Categoría: p.category,
-      Imagen: p.imageUrl,
+      Descripción: (p as any).description ?? "",
+      Categoría: (p as any).category ?? "",
+      Imagen: (p as any).imageUrl ?? "",
     }));
 
   const exportProductsCSV = () => {
@@ -146,15 +153,15 @@ const ProductsView: React.FC = () => {
     setForm({
       name: p.name,
       sku: p.sku,
-      price: String(p.price),
-      cost: String(p.cost),
-      stock: String(p.stock),
-      description: p.description || "",
-      category: p.category || "",
-      imageUrl: p.imageUrl || "",
+      price: String((p as any).price ?? ""),
+      cost: String((p as any).cost ?? ""),
+      stock: String((p as any).stock ?? "0"),
+      description: (p as any).description ?? "",
+      category: (p as any).category ?? "",
+      imageUrl: (p as any).imageUrl ?? "",
     });
     setLocalImageFile(null);
-    setPreviewUrl(p.imageUrl || null);
+    setPreviewUrl((p as any).imageUrl ?? null);
     setIsEditing(true);
     setSelectedId(p.id);
     setIsCollapsed(false);
@@ -167,13 +174,15 @@ const ProductsView: React.FC = () => {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      // Ajusta endpoint según tu backend (Cloudinary presigned, Firebase, o tu /api/upload)
+
       const res = await fetch("/api/upload", {
         method: "POST",
         body: fd,
       });
+      const json = await res.json().catch(() => null);
+      console.log("uploadFile response", res.status, json);
       if (!res.ok) throw new Error("Upload failed");
-      const json = await res.json();
+      if (!json || !json.url) throw new Error("No url returned from upload");
       return json.url as string;
     } finally {
       setUploading(false);
@@ -184,6 +193,7 @@ const ProductsView: React.FC = () => {
     const file = e.target.files?.[0] || null;
     if (!file) return;
     setLocalImageFile(file);
+    console.log("selected local image file", file.name, file.size, file.type);
   };
 
   const handleRemoveImage = () => {
@@ -195,14 +205,15 @@ const ProductsView: React.FC = () => {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
-    // Si hay un archivo local, subirlo y obtener URL antes de enviar payload
+    // if there's a local file, upload first and update form.imageUrl
     if (localImageFile) {
       try {
         const url = await uploadFile(localImageFile);
+        console.log("uploaded url", url);
         setForm((f) => ({ ...f, imageUrl: url }));
       } catch (err) {
         console.error("Image upload failed", err);
-        // continuar sin imagen si falla o manejar según prefieras
+        // optionally show user feedback; proceed without updating image
       }
     }
 
@@ -217,11 +228,17 @@ const ProductsView: React.FC = () => {
       imageUrl: form.imageUrl,
     };
 
+    console.log("payload before submit", payload);
+
     if (isEditing && selectedId !== null) {
       await editProduct(selectedId, payload);
     } else {
       await addProduct(payload);
     }
+
+    // force reload products to ensure list has updated imageUrl
+    await loadProducts();
+    console.log("products reloaded after submit", products.map(p => ({ id: p.id, imageUrl: (p as any).imageUrl })));
 
     setShowPanel(false);
     setLocalImageFile(null);
@@ -231,14 +248,15 @@ const ProductsView: React.FC = () => {
   const handleDelete = async () => {
     if (selectedId !== null) {
       await removeProduct(selectedId);
+      await loadProducts();
       setShowPanel(false);
     }
   };
 
   const getTotalInventoryValue = () => {
     return products.reduce((acc, product) => {
-      const price = Number(product.price) || 0;
-      const stock = Number(product.stock) || 0;
+      const price = Number((product as any).price) || 0;
+      const stock = Number((product as any).stock) || 0;
       return acc + price * stock;
     }, 0);
   };
@@ -306,36 +324,50 @@ const ProductsView: React.FC = () => {
                 onClick={() => openEdit(p)}
                 className="cursor-pointer bg-white rounded-2xl border border-[#fef3c6] shadow p-4 hover:shadow-lg transition flex flex-col justify-between h-full"
               >
-                {p.imageUrl && (
+                {(p as any).imageUrl ? (
                   <img
-                    src={p.imageUrl}
+                    src={(p as any).imageUrl}
                     alt={p.name}
+                    loading="lazy"
+                    onError={(e) => {
+                      const t = e.currentTarget as HTMLImageElement;
+                      t.onerror = null;
+                      t.src = "/images/product-placeholder.png";
+                    }}
                     className="w-full h-36 object-cover rounded-xl mb-2 border border-[#fef3c6]"
                   />
+                ) : (
+                  <div className="w-full h-36 flex items-center justify-center rounded-xl mb-2 border border-dashed border-[#fef3c6] bg-white text-xs text-[#973c00]">
+                    Sin imagen
+                  </div>
                 )}
+
                 <div className="flex flex-col gap-1">
                   <h3 className="font-semibold text-[#973c00] text-base sm:text-lg">
                     {p.name}
                   </h3>
                   <p className="text-sm text-[#bb4d00] break-words">{p.sku}</p>
                 </div>
+
                 <div className="mt-1">
-                  {p.description && (
-                    <p className="text-xs text-[#973c00] mt-1">{p.description}</p>
+                  {(p as any).description && (
+                    <p className="text-xs text-[#973c00] mt-1">{(p as any).description}</p>
                   )}
-                  {p.category && (
-                    <p className="text-xs text-[#bb4d00]">{p.category}</p>
+                  {(p as any).category && (
+                    <p className="text-xs text-[#bb4d00]">{(p as any).category}</p>
                   )}
                 </div>
+
                 <div className="flex justify-between items-center mt-2 text-sm sm:text-base">
                   <span className="text-green-600 font-bold">
-                    ${Number(p.price).toLocaleString("es-CO")}
+                    ${Number((p as any).price).toLocaleString("es-CO")}
                   </span>
                   <span className="text-red-500 font-bold">
-                    ${Number(p.cost).toLocaleString("es-CO")}
+                    ${Number((p as any).cost).toLocaleString("es-CO")}
                   </span>
                 </div>
-                <p className="text-xs text-[#973c00] mt-1">Stock: {p.stock}</p>
+
+                <p className="text-xs text-[#973c00] mt-1">Stock: {(p as any).stock}</p>
               </div>
             ))}
           </div>
@@ -398,7 +430,6 @@ const ProductsView: React.FC = () => {
                 onSubmit={handleSubmit}
                 className="p-3 space-y-3 max-h-[80vh] overflow-y-auto"
               >
-                {/* nombre + sku */}
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <label className="block text-xs text-[#973c00]">Nombre</label>
@@ -424,7 +455,6 @@ const ProductsView: React.FC = () => {
                   </div>
                 </div>
 
-                {/* price, cost, stock (compact) */}
                 <div className="grid grid-cols-3 gap-2">
                   <div className="space-y-1">
                     <label className="block text-xs text-[#973c00]">Precio</label>
@@ -463,7 +493,6 @@ const ProductsView: React.FC = () => {
                   </div>
                 </div>
 
-                {/* descripción */}
                 <div className="space-y-1">
                   <label className="block text-xs text-[#973c00]">Descripción</label>
                   <textarea
@@ -475,7 +504,6 @@ const ProductsView: React.FC = () => {
                   />
                 </div>
 
-                {/* categoría */}
                 <div className="space-y-1">
                   <label className="block text-xs text-[#973c00]">Categoría</label>
                   <input
@@ -487,19 +515,24 @@ const ProductsView: React.FC = () => {
                   />
                 </div>
 
-                {/* imagen: preview + file input + url fallback */}
                 <div className="space-y-1">
                   <label className="block text-xs text-[#973c00]">Imagen</label>
+
                   {previewUrl ? (
                     <div className="flex items-center gap-2">
                       <img
                         src={previewUrl}
                         alt="preview"
                         className="w-16 h-16 object-cover rounded border border-[#fef3c6]"
+                        onError={(e) => {
+                          const t = e.currentTarget as HTMLImageElement;
+                          t.onerror = null;
+                          t.src = "/images/product-placeholder.png";
+                        }}
                       />
                       <div className="flex-1">
                         <div className="flex gap-2">
-                          <label className="text-xs text-[#973c00] inline-flex items-center gap-1 cursor-pointer">
+                          <label className="inline-flex items-center gap-1 cursor-pointer">
                             <input
                               type="file"
                               accept="image/*"
@@ -544,6 +577,7 @@ const ProductsView: React.FC = () => {
                       />
                     </div>
                   )}
+
                   {uploading && <p className="text-xs text-gray-500">Subiendo imagen...</p>}
                 </div>
 

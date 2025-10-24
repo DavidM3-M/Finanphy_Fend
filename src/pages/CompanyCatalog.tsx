@@ -18,7 +18,7 @@ export default function CompanyCatalog() {
     );
   }
 
-  const url = `https://finanphy.netlify.app/catalogo/${companyId}`;
+  const url = `https://finanphy.vercel.app/catalogo/${companyId}`;
   console.log("🔗 URL del QR:", url);
 
   const descargarQR = () => {

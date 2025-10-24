@@ -384,7 +384,7 @@ const Clasificacion: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* filtros (sin fondo blanco) */}
+      {/* filtros */}
       <div className="p-4 rounded-lg border border-gray-100 mb-8 bg-transparent shadow-none">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="border p-2 rounded" />
@@ -394,7 +394,6 @@ const Clasificacion: React.FC = () => {
             <option value="ingreso">Ingresos</option>
             <option value="gasto">Gastos</option>
           </select>
-          <input type="text" placeholder="Filtrar empresa (ID)" value={filtroEmpresa} onChange={(e) => setFiltroEmpresa(e.target.value)} className="border p-2 rounded" />
         </div>
       </div>
 

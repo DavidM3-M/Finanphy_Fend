@@ -18,7 +18,7 @@ export default function ProtectedLayout() {
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-2xl font-bold text-[#973c00]">
-              Bienvenido, {user?.firstName}
+             ¡Hola {user?.firstName}!
             </h1>
             <p className="text-sm text-[#bb4d00]">Tu panel de gestión</p>
           </div>

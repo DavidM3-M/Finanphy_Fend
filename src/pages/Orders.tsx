@@ -50,7 +50,7 @@ export default function Orders() {
   const handleUpdateStatus = async (id: string, status: string) => {
   try {
     await updateOrderStatus(id, status);
-    await fetchOrders(); // ✅ refresca la lista
+    await fetchOrders(); 
     } catch (err) {
         console.error("Error al actualizar estado:", err);
         alert("No se pudo actualizar el estado. Verifica tu conexión o permisos.");

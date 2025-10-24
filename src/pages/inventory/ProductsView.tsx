@@ -1,5 +1,3 @@
-// src/pages/inventory/ProductsView.tsx
-
 import React, {
   useState,
   useEffect,
@@ -19,6 +17,9 @@ interface FormState {
   price: string;
   cost: string;
   stock: string;
+  description: string;
+  category: string;
+  imageUrl: string;
 }
 
 const ProductsView: React.FC = () => {
@@ -32,12 +33,10 @@ const ProductsView: React.FC = () => {
     removeProduct,
   } = useProducts();
 
-  // filtros y paginación
   const [filter, setFilter] = useState("");
   const [page, setPage] = useState(0);
   const pageSize = 9;
 
-  // estado del panel flotante
   const [showPanel, setShowPanel] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -48,18 +47,36 @@ const ProductsView: React.FC = () => {
     price: "",
     cost: "",
     stock: "",
+    description: "",
+    category: "",
+    imageUrl: "",
   });
+
+  const [localImageFile, setLocalImageFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   useEffect(() => {
     loadProducts();
   }, [loadProducts]);
 
-  // reset página al cambiar filtro
   useEffect(() => {
     setPage(0);
   }, [filter]);
 
-  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+  useEffect(() => {
+    if (!localImageFile) {
+      setPreviewUrl(form.imageUrl || null);
+      return;
+    }
+    const url = URL.createObjectURL(localImageFile);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [localImageFile, form.imageUrl]);
+
+  const handleChange = (
+    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
     const { name, value } = e.target;
     setForm((f) => ({ ...f, [name]: value }));
   };
@@ -69,20 +86,18 @@ const ProductsView: React.FC = () => {
       products.filter((p) => {
         const term = filter.toLowerCase();
         return (
-          p.name.toLowerCase().includes(term) ||
-          p.sku.toLowerCase().includes(term)
+          p.name.toLowerCase().includes(term) || p.sku.toLowerCase().includes(term)
         );
       }),
     [products, filter]
   );
 
-  const totalPages = Math.ceil(filtered.length / pageSize);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const paginated = useMemo(
     () => filtered.slice(page * pageSize, page * pageSize + pageSize),
     [filtered, page]
   );
 
-  // preparar datos para export
   const getProductsData = () =>
     filtered.map((p) => ({
       Nombre: p.name,
@@ -90,6 +105,9 @@ const ProductsView: React.FC = () => {
       Precio: p.price,
       Costo: p.cost,
       Stock: p.stock,
+      Descripción: p.description,
+      Categoría: p.category,
+      Imagen: p.imageUrl,
     }));
 
   const exportProductsCSV = () => {
@@ -105,45 +123,109 @@ const ProductsView: React.FC = () => {
     XLSX.writeFile(wb, "productos.xlsx");
   };
 
-  // abrir panel para nuevo producto
   const openNew = () => {
-    setForm({ name: "", sku: "", price: "", cost: "", stock: "" });
+    setForm({
+      name: "",
+      sku: "",
+      price: "",
+      cost: "",
+      stock: "",
+      description: "",
+      category: "",
+      imageUrl: "",
+    });
+    setLocalImageFile(null);
+    setPreviewUrl(null);
     setIsEditing(false);
     setSelectedId(null);
     setIsCollapsed(false);
     setShowPanel(true);
   };
 
-  // abrir panel para editar
   const openEdit = (p: Product) => {
     setForm({
       name: p.name,
       sku: p.sku,
-      price: p.price.toString(),
-      cost: p.cost.toString(),
-      stock: p.stock.toString(),
+      price: String(p.price),
+      cost: String(p.cost),
+      stock: String(p.stock),
+      description: p.description || "",
+      category: p.category || "",
+      imageUrl: p.imageUrl || "",
     });
+    setLocalImageFile(null);
+    setPreviewUrl(p.imageUrl || null);
     setIsEditing(true);
     setSelectedId(p.id);
     setIsCollapsed(false);
     setShowPanel(true);
   };
 
+  // Upload helper: posts file to /api/upload and expects: { url: string }
+  const uploadFile = async (file: File): Promise<string> => {
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      // Ajusta endpoint según tu backend (Cloudinary presigned, Firebase, o tu /api/upload)
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: fd,
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      const json = await res.json();
+      return json.url as string;
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleImageSelect = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    if (!file) return;
+    setLocalImageFile(file);
+  };
+
+  const handleRemoveImage = () => {
+    setLocalImageFile(null);
+    setForm((f) => ({ ...f, imageUrl: "" }));
+    setPreviewUrl(null);
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+
+    // Si hay un archivo local, subirlo y obtener URL antes de enviar payload
+    if (localImageFile) {
+      try {
+        const url = await uploadFile(localImageFile);
+        setForm((f) => ({ ...f, imageUrl: url }));
+      } catch (err) {
+        console.error("Image upload failed", err);
+        // continuar sin imagen si falla o manejar según prefieras
+      }
+    }
+
     const payload = {
       name: form.name,
       sku: form.sku,
-      price: parseFloat(form.price),
-      cost: parseFloat(form.cost),
-      stock: parseInt(form.stock, 10),
+      price: parseFloat(form.price) || 0,
+      cost: parseFloat(form.cost) || 0,
+      stock: parseInt(form.stock || "0", 10),
+      description: form.description,
+      category: form.category,
+      imageUrl: form.imageUrl,
     };
+
     if (isEditing && selectedId !== null) {
       await editProduct(selectedId, payload);
     } else {
       await addProduct(payload);
     }
+
     setShowPanel(false);
+    setLocalImageFile(null);
+    setPreviewUrl(null);
   };
 
   const handleDelete = async () => {
@@ -154,37 +236,37 @@ const ProductsView: React.FC = () => {
   };
 
   const getTotalInventoryValue = () => {
-  return products.reduce((acc, product) => {
-    const price = Number(product.price) || 0;
-    const stock = Number(product.stock) || 0;
-    return acc + price * stock;
-  }, 0);
-};
+    return products.reduce((acc, product) => {
+      const price = Number(product.price) || 0;
+      const stock = Number(product.stock) || 0;
+      return acc + price * stock;
+    }, 0);
+  };
 
   return (
-    
     <div className="relative p-6 bg-[#fffbeb]">
-      <h3 style={{ fontSize: '1.25rem', fontWeight: 600 }}>
-        📦 Valor total en inventario:{' '}
-        <span style={{ color: '#27ae60' }}>
-          {getTotalInventoryValue().toLocaleString('es-CO', {
-            style: 'currency',
-            currency: 'COP',
+      <h3 style={{ fontSize: "1.25rem", fontWeight: 600 }}>
+        📦 Valor total en inventario:{" "}
+        <span style={{ color: "#27ae60" }}>
+          {getTotalInventoryValue().toLocaleString("es-CO", {
+            style: "currency",
+            currency: "COP",
             minimumFractionDigits: 0,
           })}
         </span>
       </h3>
+
       {/* Export + Filtro + Nuevo */}
       <div className="flex flex-wrap items-center gap-4 mb-6">
         <button
           onClick={exportProductsCSV}
-          className="bg-blue-500 hover:bg-blue-600 text-white rounded px-4 py-2 text-sm"
+          className="bg-blue-500 hover:bg-blue-600 text-white rounded px-3 py-1.5 text-sm"
         >
           Exportar CSV
         </button>
         <button
           onClick={exportProductsExcel}
-          className="bg-green-500 hover:bg-green-600 text-white rounded px-4 py-2 text-sm"
+          className="bg-green-500 hover:bg-green-600 text-white rounded px-3 py-1.5 text-sm"
         >
           Exportar Excel
         </button>
@@ -193,11 +275,11 @@ const ProductsView: React.FC = () => {
           placeholder="Buscar por nombre o SKU…"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          className="flex-1 px-4 py-2 border border-[#fef3c6] rounded-lg bg-white"
+          className="flex-1 px-3 py-1.5 border border-[#fef3c6] rounded-lg bg-white text-sm"
         />
         <button
           onClick={openNew}
-          className="bg-[#fe9a00] hover:bg-[#e17100] text-white rounded-full w-10 h-10 flex items-center justify-center text-xl"
+          className="bg-[#fe9a00] hover:bg-[#e17100] text-white rounded-full w-10 h-10 flex items-center justify-center text-lg"
         >
           +
         </button>
@@ -224,18 +306,33 @@ const ProductsView: React.FC = () => {
                 onClick={() => openEdit(p)}
                 className="cursor-pointer bg-white rounded-2xl border border-[#fef3c6] shadow p-4 hover:shadow-lg transition flex flex-col justify-between h-full"
               >
+                {p.imageUrl && (
+                  <img
+                    src={p.imageUrl}
+                    alt={p.name}
+                    className="w-full h-36 object-cover rounded-xl mb-2 border border-[#fef3c6]"
+                  />
+                )}
                 <div className="flex flex-col gap-1">
                   <h3 className="font-semibold text-[#973c00] text-base sm:text-lg">
                     {p.name}
                   </h3>
                   <p className="text-sm text-[#bb4d00] break-words">{p.sku}</p>
                 </div>
+                <div className="mt-1">
+                  {p.description && (
+                    <p className="text-xs text-[#973c00] mt-1">{p.description}</p>
+                  )}
+                  {p.category && (
+                    <p className="text-xs text-[#bb4d00]">{p.category}</p>
+                  )}
+                </div>
                 <div className="flex justify-between items-center mt-2 text-sm sm:text-base">
                   <span className="text-green-600 font-bold">
-                    ${p.price.toLocaleString("es-CO")}
+                    ${Number(p.price).toLocaleString("es-CO")}
                   </span>
                   <span className="text-red-500 font-bold">
-                    ${p.cost.toLocaleString("es-CO")}
+                    ${Number(p.cost).toLocaleString("es-CO")}
                   </span>
                 </div>
                 <p className="text-xs text-[#973c00] mt-1">Stock: {p.stock}</p>
@@ -243,25 +340,22 @@ const ProductsView: React.FC = () => {
             ))}
           </div>
 
-
           {/* Controles de paginación */}
           <div className="flex justify-center items-center gap-4 mt-6">
             <button
               onClick={() => setPage((p) => Math.max(p - 1, 0))}
               disabled={page === 0}
-              className="px-3 py-1 border rounded disabled:opacity-50"
+              className="px-3 py-1 border rounded disabled:opacity-50 text-sm"
             >
               Anterior
             </button>
-            <span>
-              Página {page + 1} de {totalPages || 1}
+            <span className="text-sm">
+              Página {page + 1} de {totalPages}
             </span>
             <button
-              onClick={() =>
-                setPage((p) => Math.min(p + 1, totalPages - 1))
-              }
+              onClick={() => setPage((p) => Math.min(p + 1, totalPages - 1))}
               disabled={page + 1 >= totalPages}
-              className="px-3 py-1 border rounded disabled:opacity-50"
+              className="px-3 py-1 border rounded disabled:opacity-50 text-sm"
             >
               Siguiente
             </button>
@@ -269,82 +363,203 @@ const ProductsView: React.FC = () => {
         </>
       )}
 
-      {/* Panel flotante con paleta y animación suave */}
+      {/* Panel flotante compacto */}
       <AnimatePresence>
         {showPanel && (
           <motion.div
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            transition={{ duration: 0.35, ease: "easeOut" }}
-            className="fixed bottom-6 right-6 w-80 bg-[#fffbeb] border border-[#fef3c6] shadow-lg rounded-2xl overflow-hidden z-50"
+            transition={{ duration: 0.28, ease: "easeOut" }}
+            className="fixed bottom-6 right-6 max-w-sm w-full sm:w-96 bg-[#fffbeb] border border-[#fef3c6] shadow-lg rounded-2xl overflow-hidden z-50"
           >
-            <div className="flex justify-between items-center bg-[#fef3c6] px-4 py-2">
-              <h4 className="text-sm font-semibold text-[#973c00]">
+            <div className="flex justify-between items-center bg-[#fef3c6] px-3 py-1.5">
+              <h4 className="text-xs font-semibold text-[#973c00]">
                 {isEditing ? "Editar producto" : "Nuevo producto"}
               </h4>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
                 <button
                   onClick={() => setIsCollapsed((v) => !v)}
-                  className="text-lg text-[#973c00]"
+                  className="text-sm text-[#973c00] px-2"
                 >
                   {isCollapsed ? "+" : "−"}
                 </button>
                 <button
                   onClick={() => setShowPanel(false)}
-                  className="text-sm text-[#973c00]"
+                  className="text-sm text-[#973c00] px-2"
                 >
                   ✕
                 </button>
               </div>
             </div>
+
             {!isCollapsed && (
-              <form onSubmit={handleSubmit} className="p-4 space-y-4">
-                {[
-                  { name: "name", label: "Nombre", type: "text" },
-                  { name: "sku", label: "SKU", type: "text" },
-                  {
-                    name: "price",
-                    label: "Precio",
-                    type: "number",
-                    step: "0.01",
-                  },
-                  {
-                    name: "cost",
-                    label: "Costo",
-                    type: "number",
-                    step: "0.01",
-                  },
-                  { name: "stock", label: "Stock", type: "number" },
-                ].map((field) => (
-                  <div key={field.name} className="space-y-1">
-                    <label className="block text-sm text-[#973c00]">
-                      {field.label}
-                    </label>
+              <form
+                onSubmit={handleSubmit}
+                className="p-3 space-y-3 max-h-[80vh] overflow-y-auto"
+              >
+                {/* nombre + sku */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="block text-xs text-[#973c00]">Nombre</label>
                     <input
-                      name={field.name}
-                      type={field.type}
-                      step={(field as any).step}
-                      value={(form as any)[field.name]}
+                      name="name"
+                      type="text"
+                      value={form.name}
                       onChange={handleChange}
                       required
-                      className="w-full px-3 py-2 border border-[#fef3c6] rounded-lg bg-white"
+                      className="w-full px-2 py-1 border border-[#fef3c6] rounded bg-white text-sm"
                     />
                   </div>
-                ))}
+                  <div className="space-y-1">
+                    <label className="block text-xs text-[#973c00]">SKU</label>
+                    <input
+                      name="sku"
+                      type="text"
+                      value={form.sku}
+                      onChange={handleChange}
+                      required
+                      className="w-full px-2 py-1 border border-[#fef3c6] rounded bg-white text-sm"
+                    />
+                  </div>
+                </div>
+
+                {/* price, cost, stock (compact) */}
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="space-y-1">
+                    <label className="block text-xs text-[#973c00]">Precio</label>
+                    <input
+                      name="price"
+                      type="number"
+                      step="0.01"
+                      value={form.price}
+                      onChange={handleChange}
+                      required
+                      className="w-full px-2 py-1 border border-[#fef3c6] rounded bg-white text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs text-[#973c00]">Costo</label>
+                    <input
+                      name="cost"
+                      type="number"
+                      step="0.01"
+                      value={form.cost}
+                      onChange={handleChange}
+                      required
+                      className="w-full px-2 py-1 border border-[#fef3c6] rounded bg-white text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs text-[#973c00]">Stock</label>
+                    <input
+                      name="stock"
+                      type="number"
+                      value={form.stock}
+                      onChange={handleChange}
+                      required
+                      className="w-full px-2 py-1 border border-[#fef3c6] rounded bg-white text-sm"
+                    />
+                  </div>
+                </div>
+
+                {/* descripción */}
+                <div className="space-y-1">
+                  <label className="block text-xs text-[#973c00]">Descripción</label>
+                  <textarea
+                    name="description"
+                    value={form.description}
+                    onChange={handleChange}
+                    rows={2}
+                    className="w-full px-2 py-1 border border-[#fef3c6] rounded bg-white text-sm"
+                  />
+                </div>
+
+                {/* categoría */}
+                <div className="space-y-1">
+                  <label className="block text-xs text-[#973c00]">Categoría</label>
+                  <input
+                    name="category"
+                    type="text"
+                    value={form.category}
+                    onChange={handleChange}
+                    className="w-full px-2 py-1 border border-[#fef3c6] rounded bg-white text-sm"
+                  />
+                </div>
+
+                {/* imagen: preview + file input + url fallback */}
+                <div className="space-y-1">
+                  <label className="block text-xs text-[#973c00]">Imagen</label>
+                  {previewUrl ? (
+                    <div className="flex items-center gap-2">
+                      <img
+                        src={previewUrl}
+                        alt="preview"
+                        className="w-16 h-16 object-cover rounded border border-[#fef3c6]"
+                      />
+                      <div className="flex-1">
+                        <div className="flex gap-2">
+                          <label className="text-xs text-[#973c00] inline-flex items-center gap-1 cursor-pointer">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleImageSelect}
+                              className="hidden"
+                            />
+                            <span className="px-2 py-1 bg-[#f3f4f6] rounded text-xs">Cambiar</span>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={handleRemoveImage}
+                            className="px-2 py-1 bg-red-100 text-red-600 rounded text-xs"
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          name="imageUrl"
+                          value={form.imageUrl}
+                          onChange={handleChange}
+                          placeholder="O pega una URL"
+                          className="mt-1 w-full px-2 py-1 border border-[#fef3c6] rounded bg-white text-sm"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageSelect}
+                        className="w-full text-sm"
+                      />
+                      <input
+                        type="text"
+                        name="imageUrl"
+                        value={form.imageUrl}
+                        onChange={handleChange}
+                        placeholder="O pega una URL"
+                        className="w-full px-2 py-1 border border-[#fef3c6] rounded bg-white text-sm"
+                      />
+                    </div>
+                  )}
+                  {uploading && <p className="text-xs text-gray-500">Subiendo imagen...</p>}
+                </div>
 
                 <div className="flex gap-2">
                   <button
                     type="submit"
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg"
+                    disabled={uploading}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-1.5 rounded text-sm"
                   >
-                    {isEditing ? "Guardar cambios" : "Agregar"}
+                    {isEditing ? "Guardar" : "Agregar"}
                   </button>
                   {isEditing && (
                     <button
                       type="button"
                       onClick={handleDelete}
-                      className="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg"
+                      className="bg-red-500 hover:bg-red-600 text-white py-1.5 px-3 rounded text-sm"
                     >
                       Eliminar
                     </button>

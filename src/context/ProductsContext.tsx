@@ -9,12 +9,15 @@ import React, {
 import api from "../services/api";
 
 export interface Product {
-  id: number | string;
+  id: string;
   name: string;
   sku: string;
   price: number;
   cost: number;
   stock: number;
+  description?: string;
+  category?: string;
+  imageUrl?: string;
 }
 
 interface ProductsContextData {

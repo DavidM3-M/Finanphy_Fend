@@ -550,7 +550,7 @@ const ProductsView: React.FC = () => {
                     <input name="name" type="text" value={form.name} onChange={handleChange} required className="w-full px-2 py-1 border border-[#fef3c6] rounded bg-white text-sm" />
                   </div>
                   <div className="space-y-1">
-                    <label className="block text-xs text-[#973c00]">SKU</label>
+                    <label className="block text-xs text-[#973c00]">Código</label>
                     <input name="sku" type="text" value={form.sku} onChange={handleChange} required className="w-full px-2 py-1 border border-[#fef3c6] rounded bg-white text-sm" />
                   </div>
                 </div>

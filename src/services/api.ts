@@ -73,9 +73,7 @@ api.interceptors.response.use(
 // Payload para crear/editar movimientos
 export interface MovimientoPayload {
   amount: number;
-  category: number;
-  supplier: string;
-  exitDate: string;
+  category: string;
   dueDate: string;
 }
 

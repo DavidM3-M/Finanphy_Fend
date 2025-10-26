@@ -1,6 +1,7 @@
 // src/pages/Clasificacion.tsx
 import React, { useState, useEffect, FormEvent, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import type { Transition } from "framer-motion";
 import {
   getIncomes,
   getExpenses,
@@ -81,6 +82,46 @@ interface FormState {
   category: string;
 }
 const DEFAULT_CATEGORY: { ingreso: string; gasto: string } = { ingreso: "Ingreso", gasto: "Gasto" };
+
+/* Animated Timeline aside (anima el width del aside) */
+function AnimatedTimeline({ open, width = 360, children }: { open: boolean; width?: number; children?: React.ReactNode }) {
+  const w = `${width}px`;
+  const spring: Transition = { type: "spring", stiffness: 120, damping: 22, mass: 0.9, duration: 0.26 };
+
+  return (
+    <motion.aside
+      initial={false}
+      animate={{ width: open ? w : "0px" }}
+      transition={spring}
+      className="border-l border-slate-100 bg-slate-50"
+      style={{ minHeight: 0, overflow: "hidden" }}
+      aria-hidden={!open}
+    >
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            key="timeline-panel"
+            initial={{ opacity: 0, x: 10 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 8 }}
+            transition={{ duration: 0.22 }}
+            className="h-full"
+            style={{ height: "100%" }}
+          >
+            <div className="p-3 border-b">
+              <h3 className="text-sm font-semibold">Línea de tiempo</h3>
+              <p className="text-xs text-slate-500">Eventos recientes</p>
+            </div>
+
+            <div className="p-3 overflow-y-auto" style={{ maxHeight: "88vh", scrollbarGutter: "stable" }}>
+              {children}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.aside>
+  );
+}
 
 const Clasificacion: React.FC = () => {
   const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
@@ -240,368 +281,244 @@ const Clasificacion: React.FC = () => {
     .filter((m) => filtroCategoria === "todos" || (m.category ?? "").trim() === filtroCategoria)
     .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
 
-  /* Layout control */
+  /* Layout control: grid con columna principal min-w-0 y aside animado controlando su width */
   const TIMELINE_OPEN_WIDTH = 360;
-  const TIMELINE_COLLAPSED_WIDTH = 0;
-  const gridTemplateColumns = timelineOpen ? `minmax(0, 1fr) ${TIMELINE_OPEN_WIDTH}px` : `minmax(0, 1fr) ${TIMELINE_COLLAPSED_WIDTH}px`;
 
   return (
-    <div style={{ gridTemplateColumns, transition: "grid-template-columns 420ms cubic-bezier(.22,.1,.22,1)" }} className="max-w-7xl mx-auto py-8 px-4 grid gap-6" role="main">
-      {/* Main */}
-      <div>
-        <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+    <div className="max-w-7xl mx-auto py-8 px-4">
+      <div className="grid gap-6" style={{ gridTemplateColumns: `minmax(0, 1fr) auto` }}>
+        {/* Main column */}
+        <main className="min-w-0">
+          <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+            <div>
+              <h1 className="text-2xl font-extrabold text-slate-900">Clasificación de Movimientos</h1>
+              <p className="mt-1 text-sm text-slate-500">Revisa, filtra y edita ingresos y gastos</p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button onClick={() => setShowForm((s) => !s)} className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-full text-sm shadow-sm">
+                {showForm ? "Ocultar Form" : "Nuevo Movimiento"}
+              </button>
+
+              <button
+                onClick={() => setTimelineOpen((s) => !s)}
+                title={timelineOpen ? "Ocultar línea de tiempo" : "Mostrar línea de tiempo"}
+                className={`w-32 inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-full shadow-sm text-sm transition-colors
+                  ${timelineOpen ? "bg-amber-500 text-white border border-amber-500" : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50"}`}
+              >
+                Timeline
+              </button>
+            </div>
+          </header>
+
+          {/* Form compacto */}
+          <AnimatePresence initial={false}>
+            {showForm && (
+              <motion.form onSubmit={handleSubmit} initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.18 }} className="overflow-hidden p-4 rounded-xl border border-slate-100 mb-4 bg-white shadow-sm">
+                <h2 className="text-sm font-semibold text-slate-800 mb-3">{isEditing ? "Editar movimiento" : "Nuevo movimiento"}</h2>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div className="space-y-2">
+                    <label className="text-xs text-slate-600">Monto</label>
+                    <input type="number" placeholder="0.00" value={form.amount || ""} onChange={(e) => setForm((prev) => ({ ...prev, amount: parseFloat(e.target.value) || 0 }))} className="w-full border px-2 py-2 rounded-md bg-slate-50 text-sm" required />
+                    <label className="text-xs text-slate-600">Tipo</label>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => setForm((p) => ({ ...p, tipo: "ingreso" }))} className={`flex-1 px-2 py-1 rounded-md text-sm ${form.tipo === "ingreso" ? "bg-green-600 text-white" : "bg-white border text-slate-700"}`}>Ingreso</button>
+                      <button type="button" onClick={() => setForm((p) => ({ ...p, tipo: "gasto" }))} className={`flex-1 px-2 py-1 rounded-md text-sm ${form.tipo === "gasto" ? "bg-red-600 text-white" : "bg-white border text-slate-700"}`}>Gasto</button>
+                    </div>
+                  </div>
+
+                  <div className="md:col-span-2 space-y-2">
+                    <label className="text-xs text-slate-600">Proveedor / Descripción</label>
+                    <input type="text" placeholder="Pago cliente X / Factura 123" value={form.supplier} onChange={(e) => setForm((prev) => ({ ...prev, supplier: e.target.value }))} className="w-full border px-2 py-2 rounded-md text-sm" required />
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs text-slate-600">Fecha</label>
+                        <input type="date" value={form.entryDate} onChange={(e) => setForm((prev) => ({ ...prev, entryDate: e.target.value }))} className="w-full border px-2 py-2 rounded-md text-sm" required />
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-600">Categoría</label>
+                        <input list="category-suggestions" placeholder="Selecciona o escribe" value={form.category} onChange={(e) => setForm((prev) => ({ ...prev, category: e.target.value }))} className="w-full border px-2 py-2 rounded-md text-sm" />
+                        <datalist id="category-suggestions">{categoryOptions.filter((c) => c !== "todos").map((opt) => <option key={opt} value={opt} />)}</datalist>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col justify-between gap-2">
+                    <div className="text-xs text-slate-600">Resumen</div>
+                    <div className="text-sm text-slate-700">
+                      <div>Monto: <strong>{form.amount ? `$ ${Number(form.amount).toLocaleString()}` : "—"}</strong></div>
+                      <div>Tipo: <strong>{form.tipo}</strong></div>
+                      <div>Fecha: <strong>{form.entryDate || "—"}</strong></div>
+                      <div>Categoría: <strong>{form.category || (form.tipo === "ingreso" ? DEFAULT_CATEGORY.ingreso : DEFAULT_CATEGORY.gasto)}</strong></div>
+                    </div>
+                    <div className="flex gap-2">
+                      {isEditing && <button type="button" onClick={cancelEdit} className="flex-1 px-3 py-1 rounded-md bg-slate-100 text-sm">Cancelar</button>}
+                      <button type="submit" className="flex-1 px-3 py-1 rounded-md bg-amber-500 text-white text-sm">{isEditing ? "Guardar" : "Crear"}</button>
+                    </div>
+                  </div>
+                </div>
+              </motion.form>
+            )}
+          </AnimatePresence>
+
+          {/* filtros compactos */}
+          <div className="p-2 rounded-lg mb-4 bg-white border border-slate-100 shadow-sm">
+            <div className="flex items-center gap-2 flex-wrap" style={{ alignItems: "center", minWidth: 0 }} role="toolbar">
+              <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-md text-sm" style={{ minWidth: 0 }}>
+                <button onClick={() => setFiltroTipo("todos")} className={`px-2 py-1 rounded-md ${filtroTipo === "todos" ? "bg-amber-500 text-white" : "text-slate-600 hover:bg-slate-100"}`}>Todos</button>
+                <button onClick={() => setFiltroTipo("ingreso")} className={`px-2 py-1 rounded-md ${filtroTipo === "ingreso" ? "bg-green-600 text-white" : "text-slate-600 hover:bg-slate-100"}`}>Ingresos</button>
+                <button onClick={() => setFiltroTipo("gasto")} className={`px-2 py-1 rounded-md ${filtroTipo === "gasto" ? "bg-red-600 text-white" : "text-slate-600 hover:bg-slate-100"}`}>Gastos</button>
+              </div>
+
+              <select value={filtroCategoria} onChange={(e) => setFiltroCategoria(e.target.value)} className="appearance-none bg-slate-50 px-2 py-1 rounded-md text-sm border border-slate-100" style={{ minWidth: 140 }} aria-label="Filtrar por categoría">
+                {categoryOptions.map((opt) => <option key={opt} value={opt}>{opt === "todos" ? "Todas categorías" : opt}</option>)}
+              </select>
+
+              <div className="flex items-center gap-1" style={{ minWidth: 0 }}>
+                <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="px-2 py-1 rounded-md text-sm border border-slate-100 bg-white" title="Desde" style={{ minWidth: 110 }} />
+                <span className="text-xs text-slate-400">—</span>
+                <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="px-2 py-1 rounded-md text-sm border border-slate-100 bg-white" title="Hasta" style={{ minWidth: 110 }} />
+              </div>
+
+              <div className="text-xs text-slate-500 ml-2 hidden sm:block" style={{ whiteSpace: "nowrap" }}>Resultados: <strong className="text-slate-700">{movimientosFiltrados.length}</strong></div>
+
+              <div style={{ marginLeft: "auto", minWidth: 0 }}>
+                <button onClick={clearFilters} className="text-sm px-3 py-1.5 rounded-md bg-amber-500 text-white shadow-sm hover:bg-amber-600" title="Limpiar filtros">Limpiar filtros</button>
+              </div>
+            </div>
+          </div>
+
+          {/* listado */}
           <div>
-            <h1 className="text-2xl font-extrabold text-slate-900">Clasificación de Movimientos</h1>
-            <p className="mt-1 text-sm text-slate-500">Revisa, filtra y edita ingresos y gastos</p>
-          </div>
+            {gruposFiltrados.length === 0 && <p className="text-center text-slate-400 py-8">No hay movimientos</p>}
+            {gruposFiltrados.map(([mesKey, items]) => {
+              const [year, month] = mesKey.split("-");
+              const monthIndex = Number(month) - 1;
+              const monthLabel = MONTH_NAMES_ES[monthIndex] ?? mesKey;
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowForm((s) => !s)}
-              className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-full text-sm shadow-sm"
-            >
-              {showForm ? "Ocultar Form" : "Nuevo Movimiento"}
-            </button>
+              const ingresos = items.filter((it) => it.tipo === "ingreso").sort((a, b) => (b.entryDate || "").localeCompare(a.entryDate || ""));
+              const gastos = items.filter((it) => it.tipo === "gasto").sort((a, b) => (b.entryDate || "").localeCompare(a.entryDate || ""));
 
-            <button
-              onClick={() => setTimelineOpen((s) => !s)}
-              title={timelineOpen ? "Ocultar línea de tiempo" : "Mostrar línea de tiempo"}
-              className={`w-32 inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-full shadow-sm text-sm transition-colors
-                ${timelineOpen ? "bg-amber-500 text-white border border-amber-500" : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50"}`}
-            >
-              Timeline
-            </button>
-          </div>
-        </header>
+              const showIngresosColumn = filtroTipo === "todos" || filtroTipo === "ingreso";
+              const showGastosColumn = filtroTipo === "todos" || filtroTipo === "gasto";
 
-        {/* Form (compact) */}
-        <AnimatePresence initial={false}>
-          {showForm && (
-            <motion.form
-              onSubmit={handleSubmit}
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.18 }}
-              className="overflow-hidden p-4 rounded-xl border border-slate-100 mb-4 bg-white shadow-sm"
-            >
-              <h2 className="text-sm font-semibold text-slate-800 mb-3">{isEditing ? "Editar movimiento" : "Nuevo movimiento"}</h2>
+              return (
+                <section key={mesKey} className="mb-6">
+                  <h3 className="text-base font-semibold mb-3 text-slate-800">{monthLabel} {year}</h3>
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                <div className="space-y-2">
-                  <label className="text-xs text-slate-600">Monto</label>
-                  <input
-                    type="number"
-                    placeholder="0.00"
-                    value={form.amount || ""}
-                    onChange={(e) => setForm((prev) => ({ ...prev, amount: parseFloat(e.target.value) || 0 }))}
-                    className="w-full border px-2 py-2 rounded-md bg-slate-50 text-sm"
-                    required
-                  />
+                  <div className={`grid gap-3 ${showIngresosColumn && showGastosColumn ? "md:grid-cols-2" : "md:grid-cols-1"}`}>
+                    {showIngresosColumn && (
+                      <div className="bg-white rounded-lg p-3 shadow-sm border">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="text-sm font-medium text-green-700">Ingresos</h4>
+                          <div className="text-xs text-slate-500">{ingresos.length} items</div>
+                        </div>
 
-                  <label className="text-xs text-slate-600">Tipo</label>
-                  <div className="flex gap-2">
-                    <button type="button" onClick={() => setForm((p) => ({ ...p, tipo: "ingreso" }))} className={`flex-1 px-2 py-1 rounded-md text-sm ${form.tipo === "ingreso" ? "bg-green-600 text-white" : "bg-white border text-slate-700"}`}>
-                      Ingreso
-                    </button>
-                    <button type="button" onClick={() => setForm((p) => ({ ...p, tipo: "gasto" }))} className={`flex-1 px-2 py-1 rounded-md text-sm ${form.tipo === "gasto" ? "bg-red-600 text-white" : "bg-white border text-slate-700"}`}>
-                      Gasto
-                    </button>
+                        <div className="space-y-2 max-h-[56vh] overflow-y-auto pr-2">
+                          {ingresos.length === 0 && <div className="text-sm text-slate-400">No hay ingresos</div>}
+                          {ingresos.map((mov) => (
+                            <div key={mov.id} className="p-2 rounded-md bg-slate-50">
+                              <div className="flex justify-between items-start gap-2">
+                                <div className="min-w-0">
+                                  <div className="text-sm font-medium truncate">{mov.supplier}</div>
+                                  <div className="text-xs text-slate-500 mt-0.5">Fecha: {formatDateYMD(mov.entryDate)}</div>
+                                  <div className="mt-1 text-xs"><span className="inline-block bg-white border rounded-full px-2 py-0.5 text-slate-700">Categoría: <strong>{mov.category ?? DEFAULT_CATEGORY.ingreso}</strong></span></div>
+                                </div>
+
+                                <div className="text-right flex flex-col items-end gap-1">
+                                  <div className="text-sm font-semibold text-green-600">+ ${mov.amount.toLocaleString()}</div>
+                                  <div className="text-xs text-slate-400">{formatDateTime(mov.createdAt)}</div>
+
+                                  <div className="flex gap-1 mt-1">
+                                    <button onClick={() => onCardClick(mov)} className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded">Ver</button>
+                                    <button onClick={() => { setForm({ amount: mov.amount, tipo: mov.tipo, supplier: mov.supplier === "—" ? "" : mov.supplier, entryDate: mov.entryDate, category: mov.category ?? "" }); setIsEditing(true); setEditingId(mov.id); setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded">Editar</button>
+                                    <button onClick={() => requestDelete(mov.id, mov.tipo)} className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded">Eliminar</button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {showGastosColumn && (
+                      <div className="bg-white rounded-lg p-3 shadow-sm border">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="text-sm font-medium text-red-700">Gastos</h4>
+                          <div className="text-xs text-slate-500">{gastos.length} items</div>
+                        </div>
+
+                        <div className="space-y-2 max-h-[56vh] overflow-y-auto pr-2">
+                          {gastos.length === 0 && <div className="text-sm text-slate-400">No hay gastos</div>}
+                          {gastos.map((mov) => (
+                            <div key={mov.id} className="p-2 rounded-md bg-slate-50">
+                              <div className="flex justify-between items-start gap-2">
+                                <div className="min-w-0">
+                                  <div className="text-sm font-medium truncate">{mov.supplier}</div>
+                                  <div className="text-xs text-slate-500 mt-0.5">Fecha: {formatDateYMD(mov.entryDate)}</div>
+                                  <div className="mt-1 text-xs"><span className="inline-block bg-white border rounded-full px-2 py-0.5 text-slate-700">Categoría: <strong>{mov.category ?? DEFAULT_CATEGORY.gasto}</strong></span></div>
+                                </div>
+
+                                <div className="text-right flex flex-col items-end gap-1">
+                                  <div className="text-sm font-semibold text-red-600">- ${mov.amount.toLocaleString()}</div>
+                                  <div className="text-xs text-slate-400">{formatDateTime(mov.createdAt)}</div>
+
+                                  <div className="flex gap-1 mt-1">
+                                    <button onClick={() => onCardClick(mov)} className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded">Ver</button>
+                                    <button onClick={() => { setForm({ amount: mov.amount, tipo: mov.tipo, supplier: mov.supplier === "—" ? "" : mov.supplier, entryDate: mov.entryDate, category: mov.category ?? "" }); setIsEditing(true); setEditingId(mov.id); setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded">Editar</button>
+                                    <button onClick={() => requestDelete(mov.id, mov.tipo)} className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded">Eliminar</button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
+                </section>
+              );
+            })}
+          </div>
+        </main>
 
-                <div className="md:col-span-2 space-y-2">
-                  <label className="text-xs text-slate-600">Proveedor / Descripción</label>
-                  <input
-                    type="text"
-                    placeholder="Pago cliente X / Factura 123"
-                    value={form.supplier}
-                    onChange={(e) => setForm((prev) => ({ ...prev, supplier: e.target.value }))}
-                    className="w-full border px-2 py-2 rounded-md text-sm"
-                    required
-                  />
+        {/* Animated timeline aside */}
+        <AnimatedTimeline open={timelineOpen} width={TIMELINE_OPEN_WIDTH}>
+          {timelineItems.length === 0 ? <div className="text-slate-500">Sin eventos</div> : (
+            <div className="space-y-3">
+              {timelineItems.map((t) => (
+                <div key={t.id} className="flex items-start gap-3">
+                  <div className="flex flex-col items-center">
+                    <div className={`w-2.5 h-2.5 rounded-full ${t.tipo === "ingreso" ? "bg-green-600" : "bg-red-600"}`} />
+                    <div className="w-px flex-1 bg-slate-200 mt-2" />
+                  </div>
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-xs text-slate-600">Fecha</label>
-                      <input
-                        type="date"
-                        value={form.entryDate}
-                        onChange={(e) => setForm((prev) => ({ ...prev, entryDate: e.target.value }))}
-                        className="w-full border px-2 py-2 rounded-md text-sm"
-                        required
-                      />
+                  <div className="flex-1 bg-white p-2 rounded-md border shadow-sm">
+                    <div className="flex justify-between items-start">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium truncate">{t.supplier}</div>
+                        <div className="text-xs text-slate-500">{formatDateYMD(t.entryDate)}</div>
+                        <div className="text-xs text-slate-500 mt-1">Categoría: <strong className="text-slate-700">{t.category ?? (t.tipo === "ingreso" ? DEFAULT_CATEGORY.ingreso : DEFAULT_CATEGORY.gasto)}</strong></div>
+                      </div>
+                      <div className="text-right">
+                        <div className={`font-semibold ${t.tipo === "ingreso" ? "text-green-600" : "text-red-600"}`}>{t.tipo === "ingreso" ? "+" : "-"} ${t.amount.toLocaleString()}</div>
+                        <div className="text-xs text-slate-400">{formatDateTime(t.createdAt)}</div>
+                      </div>
                     </div>
 
-                    <div>
-                      <label className="text-xs text-slate-600">Categoría</label>
-                      <input
-                        list="category-suggestions"
-                        placeholder="Selecciona o escribe"
-                        value={form.category}
-                        onChange={(e) => setForm((prev) => ({ ...prev, category: e.target.value }))}
-                        className="w-full border px-2 py-2 rounded-md text-sm"
-                      />
-                      <datalist id="category-suggestions">
-                        {categoryOptions.filter((c) => c !== "todos").map((opt) => <option key={opt} value={opt} />)}
-                      </datalist>
+                    <div className="mt-2 flex gap-1">
+                      <button onClick={() => onCardClick(t)} className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded">Ver</button>
+                      <button onClick={() => { setForm({ amount: t.amount, tipo: t.tipo, supplier: t.supplier === "—" ? "" : t.supplier, entryDate: t.entryDate, category: t.category ?? "" }); setIsEditing(true); setEditingId(t.id); setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded">Editar</button>
+                      <button onClick={() => requestDelete(t.id, t.tipo)} className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded">Eliminar</button>
                     </div>
                   </div>
                 </div>
-
-                <div className="flex flex-col justify-between gap-2">
-                  <div className="text-xs text-slate-600">Resumen</div>
-                  <div className="text-sm text-slate-700">
-                    <div>Monto: <strong>{form.amount ? `$ ${Number(form.amount).toLocaleString()}` : "—"}</strong></div>
-                    <div>Tipo: <strong>{form.tipo}</strong></div>
-                    <div>Fecha: <strong>{form.entryDate || "—"}</strong></div>
-                    <div>Categoría: <strong>{form.category || (form.tipo === "ingreso" ? DEFAULT_CATEGORY.ingreso : DEFAULT_CATEGORY.gasto)}</strong></div>
-                  </div>
-
-                  <div className="flex gap-2">
-                    {isEditing && <button type="button" onClick={cancelEdit} className="flex-1 px-3 py-1 rounded-md bg-slate-100 text-sm">Cancelar</button>}
-                    <button type="submit" className="flex-1 px-3 py-1 rounded-md bg-amber-500 text-white text-sm">{isEditing ? "Guardar" : "Crear"}</button>
-                  </div>
-                </div>
-              </div>
-            </motion.form>
-          )}
-        </AnimatePresence>
-
-        {/* Filtros compactos y más limpios */}
-        <div className="p-2 rounded-lg mb-4 bg-white border border-slate-100 shadow-sm">
-          <div className="flex items-center gap-2">
-            {/* segmented control compacto */}
-            <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-md text-sm">
-              <button
-                onClick={() => setFiltroTipo("todos")}
-                className={`px-2 py-1 rounded-md ${filtroTipo === "todos" ? "bg-amber-500 text-white" : "text-slate-600 hover:bg-slate-100"}`}
-              >
-                Todos
-              </button>
-              <button
-                onClick={() => setFiltroTipo("ingreso")}
-                className={`px-2 py-1 rounded-md ${filtroTipo === "ingreso" ? "bg-green-600 text-white" : "text-slate-600 hover:bg-slate-100"}`}
-              >
-                Ingresos
-              </button>
-              <button
-                onClick={() => setFiltroTipo("gasto")}
-                className={`px-2 py-1 rounded-md ${filtroTipo === "gasto" ? "bg-red-600 text-white" : "text-slate-600 hover:bg-slate-100"}`}
-              >
-                Gastos
-              </button>
-            </div>
-
-            {/* categoría compacta */}
-            <select
-              value={filtroCategoria}
-              onChange={(e) => setFiltroCategoria(e.target.value)}
-              className="appearance-none bg-slate-50 px-2 py-1 rounded-md text-sm border border-slate-100"
-              style={{ minWidth: 160 }}
-            >
-              {categoryOptions.map((opt) => (
-                <option key={opt} value={opt}>{opt === "todos" ? "Todas categorías" : opt}</option>
               ))}
-            </select>
-
-            {/* fechas compactas */}
-            <div className="flex items-center gap-1">
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="px-2 py-1 rounded-md text-sm border border-slate-100 bg-white"
-                title="Desde"
-              />
-              <span className="text-xs text-slate-400">—</span>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="px-2 py-1 rounded-md text-sm border border-slate-100 bg-white"
-                title="Hasta"
-              />
             </div>
-
-            {/* contador */}
-            <div className="text-xs text-slate-500 ml-2 hidden sm:block">Resultados: <strong className="text-slate-700">{movimientosFiltrados.length}</strong></div>
-
-            {/* Limpiar - en la misma línea y destacado */}
-            <div className="ml-auto">
-              <button
-                onClick={clearFilters}
-                className="text-sm px-3 py-1.5 rounded-md bg-amber-500 text-white shadow-sm hover:bg-amber-600"
-                title="Limpiar filtros"
-              >
-                Limpiar filtros
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Listado por mes */}
-        <div>
-          {gruposFiltrados.length === 0 && <p className="text-center text-slate-400 py-8">No hay movimientos</p>}
-          {gruposFiltrados.map(([mesKey, items]) => {
-            const [year, month] = mesKey.split("-");
-            const monthIndex = Number(month) - 1;
-            const monthLabel = MONTH_NAMES_ES[monthIndex] ?? mesKey;
-
-            // Orden descendente por entryDate
-            const ingresos = items
-              .filter((it) => it.tipo === "ingreso")
-              .sort((a, b) => (b.entryDate || "").localeCompare(a.entryDate || ""));
-
-            const gastos = items
-              .filter((it) => it.tipo === "gasto")
-              .sort((a, b) => (b.entryDate || "").localeCompare(a.entryDate || ""));
-
-            const showIngresosColumn = filtroTipo === "todos" || filtroTipo === "ingreso";
-            const showGastosColumn = filtroTipo === "todos" || filtroTipo === "gasto";
-
-            return (
-              <section key={mesKey} className="mb-6">
-                <h3 className="text-base font-semibold mb-3 text-slate-800">{monthLabel} {year}</h3>
-
-                <div className={`grid gap-3 ${showIngresosColumn && showGastosColumn ? "md:grid-cols-2" : "md:grid-cols-1"}`}>
-                  {showIngresosColumn && (
-                    <div className="bg-white rounded-lg p-3 shadow-sm border">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-sm font-medium text-green-700">Ingresos</h4>
-                        <div className="text-xs text-slate-500">{ingresos.length} items</div>
-                      </div>
-
-                      <div className="space-y-2 max-h-[56vh] overflow-y-auto pr-2">
-                        {ingresos.length === 0 && <div className="text-sm text-slate-400">No hay ingresos</div>}
-                        {ingresos.map((mov) => (
-                          <div key={mov.id} className="p-2 rounded-md bg-slate-50">
-                            <div className="flex justify-between items-start gap-2">
-                              <div className="min-w-0">
-                                <div className="text-sm font-medium truncate">{mov.supplier}</div>
-                                <div className="text-xs text-slate-500 mt-0.5">Fecha: {formatDateYMD(mov.entryDate)}</div>
-                                <div className="mt-1 text-xs"><span className="inline-block bg-white border rounded-full px-2 py-0.5 text-slate-700">Categoría: <strong>{mov.category ?? DEFAULT_CATEGORY.ingreso}</strong></span></div>
-                              </div>
-
-                              <div className="text-right flex flex-col items-end gap-1">
-                                <div className="text-sm font-semibold text-green-600">+ ${mov.amount.toLocaleString()}</div>
-                                <div className="text-xs text-slate-400">{formatDateTime(mov.createdAt)}</div>
-
-                                <div className="flex gap-1 mt-1">
-                                  <button onClick={() => onCardClick(mov)} className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded">Ver</button>
-                                  <button onClick={() => { setForm({ amount: mov.amount, tipo: mov.tipo, supplier: mov.supplier === "—" ? "" : mov.supplier, entryDate: mov.entryDate, category: mov.category ?? "" }); setIsEditing(true); setEditingId(mov.id); setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded">Editar</button>
-                                  <button onClick={() => requestDelete(mov.id, mov.tipo)} className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded">Eliminar</button>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {showGastosColumn && (
-                    <div className="bg-white rounded-lg p-3 shadow-sm border">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-sm font-medium text-red-700">Gastos</h4>
-                        <div className="text-xs text-slate-500">{gastos.length} items</div>
-                      </div>
-
-                      <div className="space-y-2 max-h-[56vh] overflow-y-auto pr-2">
-                        {gastos.length === 0 && <div className="text-sm text-slate-400">No hay gastos</div>}
-                        {gastos.map((mov) => (
-                          <div key={mov.id} className="p-2 rounded-md bg-slate-50">
-                            <div className="flex justify-between items-start gap-2">
-                              <div className="min-w-0">
-                                <div className="text-sm font-medium truncate">{mov.supplier}</div>
-                                <div className="text-xs text-slate-500 mt-0.5">Fecha: {formatDateYMD(mov.entryDate)}</div>
-                                <div className="mt-1 text-xs"><span className="inline-block bg-white border rounded-full px-2 py-0.5 text-slate-700">Categoría: <strong>{mov.category ?? DEFAULT_CATEGORY.gasto}</strong></span></div>
-                              </div>
-
-                              <div className="text-right flex flex-col items-end gap-1">
-                                <div className="text-sm font-semibold text-red-600">- ${mov.amount.toLocaleString()}</div>
-                                <div className="text-xs text-slate-400">{formatDateTime(mov.createdAt)}</div>
-
-                                <div className="flex gap-1 mt-1">
-                                  <button onClick={() => onCardClick(mov)} className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded">Ver</button>
-                                  <button onClick={() => { setForm({ amount: mov.amount, tipo: mov.tipo, supplier: mov.supplier === "—" ? "" : mov.supplier, entryDate: mov.entryDate, category: mov.category ?? "" }); setIsEditing(true); setEditingId(mov.id); setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded">Editar</button>
-                                  <button onClick={() => requestDelete(mov.id, mov.tipo)} className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded">Eliminar</button>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </section>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Timeline panel */}
-      <motion.aside
-        initial={false}
-        animate={{ width: timelineOpen ? TIMELINE_OPEN_WIDTH : TIMELINE_COLLAPSED_WIDTH }}
-        transition={{ type: "spring", stiffness: 160, damping: 24 }}
-        className="relative border-l border-slate-100 bg-slate-50 flex flex-col"
-        style={{ minHeight: 0, overflow: "hidden" }}
-      >
-        {timelineOpen && (
-          <div className="p-3 border-b">
-            <h3 className="text-sm font-semibold">Línea de tiempo</h3>
-            <p className="text-xs text-slate-500">Eventos recientes</p>
-          </div>
-        )}
-
-        <AnimatePresence initial={false}>
-          {timelineOpen && (
-            <motion.div
-              key="timeline-content"
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 6 }}
-              transition={{ duration: 0.22 }}
-              className="p-3 overflow-y-auto flex-1 max-h-[88vh] pr-3"
-              style={{ scrollbarGutter: "stable" }}
-            >
-              {timelineItems.length === 0 && <div className="text-slate-500">Sin eventos</div>}
-              <div className="space-y-3">
-                {timelineItems.map((t) => (
-                  <div key={t.id} className="flex items-start gap-3">
-                    <div className="flex flex-col items-center">
-                      <div className={`w-2.5 h-2.5 rounded-full ${t.tipo === "ingreso" ? "bg-green-600" : "bg-red-600"}`} />
-                      <div className="w-px flex-1 bg-slate-200 mt-2" />
-                    </div>
-
-                    <div className="flex-1 bg-white p-2 rounded-md border shadow-sm">
-                      <div className="flex justify-between items-start">
-                        <div className="min-w-0">
-                          <div className="text-sm font-medium truncate">{t.supplier}</div>
-                          <div className="text-xs text-slate-500">{formatDateYMD(t.entryDate)}</div>
-                          <div className="text-xs text-slate-500 mt-1">Categoría: <strong className="text-slate-700">{t.category ?? (t.tipo === "ingreso" ? DEFAULT_CATEGORY.ingreso : DEFAULT_CATEGORY.gasto)}</strong></div>
-                        </div>
-                        <div className="text-right">
-                          <div className={`font-semibold ${t.tipo === "ingreso" ? "text-green-600" : "text-red-600"}`}>{t.tipo === "ingreso" ? "+" : "-"} ${t.amount.toLocaleString()}</div>
-                          <div className="text-xs text-slate-400">{formatDateTime(t.createdAt)}</div>
-                        </div>
-                      </div>
-
-                      <div className="mt-2 flex gap-1">
-                        <button onClick={() => onCardClick(t)} className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded">Ver</button>
-                        <button onClick={() => { setForm({ amount: t.amount, tipo: t.tipo, supplier: t.supplier === "—" ? "" : t.supplier, entryDate: t.entryDate, category: t.category ?? "" }); setIsEditing(true); setEditingId(t.id); setShowForm(true); window.scrollTo({ top: 0, behavior: "smooth" }); }} className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded">Editar</button>
-                        <button onClick={() => requestDelete(t.id, t.tipo)} className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded">Eliminar</button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
           )}
-        </AnimatePresence>
-      </motion.aside>
+        </AnimatedTimeline>
+      </div>
 
       {/* Modales */}
       <AnimatePresence>
@@ -628,7 +545,7 @@ const Clasificacion: React.FC = () => {
         {toDelete && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/50" />
-            <motion.div initial={{ scale: 0.98, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.98, opacity: 0 }} transition={{ duration: 0.14 }} className="relative bg-white p-4 rounded-lg shadow-lg z-10 w-full max-w-sm">
+            <motion.div initial={{ scale: 0.98 }} animate={{ scale: 1 }} exit={{ scale: 0.98 }} transition={{ type: "spring", stiffness: 100, damping: 18 }} className="relative bg-white p-4 rounded-lg shadow-lg z-10 w-full max-w-sm">
               <h4 className="text-lg font-semibold mb-2">Confirmar eliminación</h4>
               <p className="mb-3 text-sm text-slate-600">¿Deseas eliminar este evento? Esta acción no se puede deshacer.</p>
               <div className="flex justify-end gap-2">

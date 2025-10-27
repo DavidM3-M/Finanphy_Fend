@@ -1,18 +1,20 @@
-// src/components/OrderModal.tsx
 import React, { useEffect, useState } from "react";
 import { createOrder } from "../services/clientOrders";
 import { getProducts } from "../services/products";
 import { Product } from "../types";
 import { pdf, Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
+import { useAuth } from "../context/AuthContext";
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  companyId: string;
+  companyId?: string; // opcional, ya no se usará como fuente de verdad
   onCreated: () => void;
 }
 
 export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Props) {
+  const { company: authCompany, token: authToken } = useAuth();
+
   const [products, setProducts] = useState<Product[]>([]);
   const [selected, setSelected] = useState<{ product: Product; quantity: number }[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -46,34 +48,56 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
     setSelected(updated);
   };
 
+  const safeNumber = (v: any) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+
   const handleSubmit = async () => {
+    if (!authCompany || !authCompany.id) {
+      alert("No se encontró la empresa del usuario autenticado. Verifica tu sesión.");
+      return;
+    }
+
+    if (selected.length === 0) {
+      alert("Selecciona al menos un producto.");
+      return;
+    }
+
     setLoading(true);
     try {
       const items = selected.map(i => ({
         productId: i.product.id,
         quantity: i.quantity,
       }));
-      // description no se envía al backend actualmente
-      await createOrder({ companyId, items });
+
+      const payload: any = {
+        items,
+        description: description || undefined,
+        // Forzar companyId desde el contexto de autenticación
+        companyId: authCompany.id,
+      };
+
+      // Si tu createOrder usa Authorization header, se mantiene el uso del token en servicios
+      await createOrder(payload);
+
       onCreated();
       onClose();
     } catch (err) {
       console.error("Error al crear orden:", err);
+      alert("Error al crear la orden");
     } finally {
       setLoading(false);
     }
   };
 
   const total = selected.reduce(
-    (sum, item) => sum + parseFloat(item.product.price) * item.quantity,
+    (sum, item) => sum + safeNumber(item.product.price) * safeNumber(item.quantity),
     0
   );
 
   if (!isOpen) return null;
 
-  /* ---------------------------
-     Componente PDF (cliente)
-     --------------------------- */
   const styles = StyleSheet.create({
     page: { padding: 20, fontSize: 11, fontFamily: "Helvetica" },
     header: { flexDirection: "row", justifyContent: "space-between", marginBottom: 12 },
@@ -93,14 +117,15 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
     return `COP ${n.toLocaleString("es-CO", { minimumFractionDigits: 2 })}`;
   }
 
-  // Documento que se renderiza con los datos actuales de la orden
   const OrderPdfDocument = () => (
     <Document>
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
           <View>
             <Text style={styles.title}>Orden de compra</Text>
-            <Text>Empresa: {companyId}</Text>
+            <Text>Empresa: {authCompany?.tradeName ?? (companyId ?? "Sin empresa")}</Text>
+            <Text>Email: {authCompany?.companyEmail ?? "N/D"}</Text>
+            <Text>Teléfono: {authCompany?.companyPhone ?? "N/D"}</Text>
           </View>
           <View>
             <Text>Fecha: {new Date().toLocaleDateString()}</Text>
@@ -118,7 +143,7 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
           </View>
 
           {selected.map((it, idx) => {
-            const subtotal = parseFloat(it.product.price) * it.quantity;
+            const subtotal = safeNumber(it.product.price) * safeNumber(it.quantity);
             return (
               <View key={idx} style={styles.row} wrap={false}>
                 <Text style={styles.desc}>{it.product.name}</Text>
@@ -143,41 +168,28 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
     </Document>
   );
 
-  /* -------------------------------------------
-     Genera el PDF y abre una nueva pestaña con blob
-     ------------------------------------------- */
   const handlePreviewPdf = async () => {
     try {
-      // Si no hay items, no generar
       if (selected.length === 0) return;
-
-      // Genera el PDF con @react-pdf/renderer -> blob
       const asPdf = pdf(<OrderPdfDocument />);
       const blob = await asPdf.toBlob();
-
-      // Crea URL y abre en nueva pestaña
       const url = URL.createObjectURL(blob);
       window.open(url, "_blank");
-
-      // opcional: revocar la URL después de un tiempo
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (err) {
       console.error("Error generando PDF:", err);
+      alert("Error generando PDF");
     }
   };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg w-full max-w-6xl shadow-xl max-h-screen flex flex-col">
-        {/* Encabezado */}
         <div className="p-6 border-b">
           <h2 className="text-xl font-bold text-[#973c00] mb-4">Crear orden</h2>
 
-          {/* Descripción */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Descripción de la orden
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Descripción de la orden</label>
             <textarea
               value={description}
               onChange={e => setDescription(e.target.value)}
@@ -188,9 +200,7 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
           </div>
         </div>
 
-        {/* Contenido scrollable */}
         <div className="grid grid-cols-2 gap-6 px-6 py-4 overflow-hidden flex-grow">
-          {/* Panel izquierdo: productos */}
           <div className="overflow-y-auto pr-2">
             <h3 className="font-semibold mb-4">Productos</h3>
 
@@ -204,9 +214,7 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
 
             <div className="grid grid-cols-2 gap-4">
               {products
-                .filter(p =>
-                  p.name.toLowerCase().includes(searchTerm.toLowerCase())
-                )
+                .filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()))
                 .map(product => (
                   <div
                     key={product.id}
@@ -221,7 +229,6 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
             </div>
           </div>
 
-          {/* Panel derecho: selección */}
           <div className="bg-yellow-50 p-4 rounded-lg shadow-inner overflow-y-auto">
             <h3 className="font-semibold mb-4">Selección</h3>
             {selected.length === 0 ? (
@@ -233,12 +240,8 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
                     <div className="flex justify-between items-center">
                       <div>
                         <p className="font-semibold">{item.product.name}</p>
-                        <p className="text-sm text-gray-600">
-                          Precio unitario: COP {item.product.price}
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          Stock disponible: {item.product.stock}
-                        </p>
+                        <p className="text-sm text-gray-600">Precio unitario: COP {item.product.price}</p>
+                        <p className="text-sm text-gray-600">Stock disponible: {item.product.stock}</p>
                         <input
                           type="number"
                           min={1}
@@ -278,13 +281,10 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
               </ul>
             )}
 
-            <div className="mt-6 text-right font-bold text-[#973c00] text-lg">
-              Total: COP {total.toLocaleString("es-CO")}
-            </div>
+            <div className="mt-6 text-right font-bold text-[#973c00] text-lg">Total: COP {total.toLocaleString("es-CO")}</div>
           </div>
         </div>
 
-        {/* Botones fijos */}
         <div className="px-6 py-4 border-t flex justify-between items-center gap-4">
           <div className="flex items-center gap-3">
             <button
@@ -295,7 +295,6 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
               ⏴
             </button>
 
-            {/* Botón de previsualizar PDF */}
             <button
               onClick={handlePreviewPdf}
               disabled={selected.length === 0}

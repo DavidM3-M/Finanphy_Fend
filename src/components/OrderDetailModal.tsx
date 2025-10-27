@@ -1,29 +1,45 @@
-// src/components/OrderDetailModal.tsx
 import React from "react";
 import { Order } from "../types";
 import { pdf, Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
+import { useAuth } from "../context/AuthContext";
 
 interface Props {
   order: Order | null;
   onClose: () => void;
 }
 
-// Extensión local del tipo para evitar error TS
 interface ExtendedOrder extends Order {
   description?: string;
 }
 
 export default function OrderDetailModal({ order, onClose }: Props) {
+  const { company: authCompany } = useAuth();
+
   if (!order) return null;
+
+  const companyToShow =
+    authCompany ?? order.company ?? {
+      id: "",
+      tradeName: "Empresa no disponible",
+      taxId: "",
+      companyEmail: undefined,
+      companyPhone: undefined,
+      fiscalAddress: undefined,
+    };
 
   const extendedOrder = order as ExtendedOrder;
 
+  const safeNumber = (v: any) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+
   const total = order.items.reduce((sum, item) => {
-    const subtotal = parseFloat(item.unitPrice) * item.quantity;
-    return sum + subtotal;
+    const unit = safeNumber(item.unitPrice);
+    const qty = safeNumber(item.quantity);
+    return sum + unit * qty;
   }, 0);
 
-  // --- PDF styles and document (using @react-pdf/renderer) ---
   const styles = StyleSheet.create({
     page: { padding: 20, fontSize: 11, fontFamily: "Helvetica" },
     header: { flexDirection: "row", justifyContent: "space-between", marginBottom: 12 },
@@ -56,8 +72,12 @@ export default function OrderDetailModal({ order, onClose }: Props) {
 
           <View style={{ alignItems: "flex-end" }}>
             <Text>Fecha: {new Date(order.createdAt).toLocaleDateString()}</Text>
-            <Text>Cliente: {order.user?.firstName} {order.user?.lastName}</Text>
-            <Text>Empresa: {order.company.tradeName}</Text>
+            <Text>
+              Cliente: {order.user?.firstName ?? ""} {order.user?.lastName ?? ""}
+            </Text>
+            <Text>Empresa: {companyToShow.tradeName}</Text>
+            <Text>Email: {companyToShow.companyEmail ?? "N/D"}</Text>
+            <Text>Teléfono: {companyToShow.companyPhone ?? "N/D"}</Text>
           </View>
         </View>
 
@@ -78,11 +98,12 @@ export default function OrderDetailModal({ order, onClose }: Props) {
           </View>
 
           {order.items.map((item) => {
-            const subtotal = parseFloat(item.unitPrice) * item.quantity;
+            const unit = safeNumber(item.unitPrice);
+            const subtotal = unit * safeNumber(item.quantity);
             return (
               <View key={item.id} style={styles.row} wrap={false}>
-                <Text style={styles.desc}>{item.product.name}</Text>
-                <Text style={styles.qty}>{item.quantity}</Text>
+                <Text style={styles.desc}>{item.product?.name ?? "Producto desconocido"}</Text>
+                <Text style={styles.qty}>{safeNumber(item.quantity)}</Text>
                 <Text style={styles.price}>{formatCurrency(subtotal)}</Text>
               </View>
             );
@@ -100,12 +121,17 @@ export default function OrderDetailModal({ order, onClose }: Props) {
           </View>
         </View>
 
-        <Text style={styles.footer}>Generado por Finanphy</Text>
+        <View style={{ marginTop: 16 }}>
+          <Text style={{ fontSize: 10, color: "#444", marginBottom: 4 }}>Datos fiscales de la empresa:</Text>
+          <Text style={{ fontSize: 10, color: "#444" }}>
+            NIT: {companyToShow.taxId ?? "N/D"} — Dirección: {companyToShow.fiscalAddress ?? "N/D"}
+          </Text>
+          <Text style={{ fontSize: 9, color: "#666", marginTop: 10 }}>Generado por Finanphy</Text>
+        </View>
       </Page>
     </Document>
   );
 
-  // --- Handlers para generar y abrir/descargar PDF ---
   const handlePreviewPdf = async () => {
     try {
       const asPdf = pdf(<OrderPdfDocument />);
@@ -141,39 +167,55 @@ export default function OrderDetailModal({ order, onClose }: Props) {
         <h2 className="text-xl font-bold mb-6 text-[#973c00]">📄 Detalle de orden</h2>
 
         <div className="grid grid-cols-2 gap-6">
-          {/* Productos */}
           <div>
             <h3 className="font-semibold mb-2">🛒 Productos</h3>
             <ul className="space-y-2 max-h-60 overflow-y-auto">
-              {order.items.map(item => (
-                <li key={item.id} className="border p-3 rounded">
-                  <p className="font-semibold">{item.product.name}</p>
-                  <p className="text-sm text-gray-600">Cantidad: {item.quantity}</p>
-                  <p className="text-sm text-gray-600">Precio unitario: COP {item.unitPrice}</p>
-                  <p className="text-sm text-gray-600">
-                    Subtotal: COP {(parseFloat(item.unitPrice) * item.quantity).toLocaleString("es-CO")}
-                  </p>
-                </li>
-              ))}
+              {order.items.map((item) => {
+                const unit = safeNumber(item.unitPrice);
+                const subtotal = unit * safeNumber(item.quantity);
+                return (
+                  <li key={item.id} className="border p-3 rounded">
+                    <p className="font-semibold">{item.product?.name ?? "Producto desconocido"}</p>
+                    <p className="text-sm text-gray-600">Cantidad: {safeNumber(item.quantity)}</p>
+                    <p className="text-sm text-gray-600">Precio unitario: COP {unit}</p>
+                    <p className="text-sm text-gray-600">Subtotal: COP {subtotal.toLocaleString("es-CO")}</p>
+                  </li>
+                );
+              })}
             </ul>
           </div>
 
-          {/* Detalles adicionales */}
           <div className="bg-yellow-50 p-4 rounded-lg shadow-inner">
             <div className="space-y-2 mb-4">
-              <p><strong>Código:</strong> {order.orderCode}</p>
-              <p><strong>Estado:</strong> {order.status}</p>
-              <p><strong>Fecha:</strong> {new Date(order.createdAt).toLocaleDateString()}</p>
-              <p><strong>Cliente:</strong> {order.user?.firstName} {order.user?.lastName}</p>
-              <p><strong>Empresa:</strong> {order.company.tradeName}</p>
+              <p>
+                <strong>Código:</strong> {order.orderCode}
+              </p>
+              <p>
+                <strong>Estado:</strong> {order.status}
+              </p>
+              <p>
+                <strong>Fecha:</strong> {new Date(order.createdAt).toLocaleDateString()}
+              </p>
+              <p>
+                <strong>Cliente:</strong> {order.user?.firstName ?? ""} {order.user?.lastName ?? ""}
+              </p>
+              <p>
+                <strong>Empresa:</strong> {companyToShow.tradeName}
+              </p>
+              <p className="text-sm text-gray-700">
+                <strong>Email:</strong> {companyToShow.companyEmail ?? "N/D"}
+              </p>
+              <p className="text-sm text-gray-700">
+                <strong>Teléfono:</strong> {companyToShow.companyPhone ?? "N/D"}
+              </p>
               {extendedOrder.description && (
-                <p><strong>Descripción:</strong> {extendedOrder.description}</p>
+                <p>
+                  <strong>Descripción:</strong> {extendedOrder.description}
+                </p>
               )}
             </div>
 
-            <div className="text-right font-bold text-[#973c00]">
-              Total: COP {total.toLocaleString("es-CO")}
-            </div>
+            <div className="text-right font-bold text-[#973c00]">Total: COP {total.toLocaleString("es-CO")}</div>
           </div>
         </div>
 

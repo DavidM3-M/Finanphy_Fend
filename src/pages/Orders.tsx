@@ -127,7 +127,7 @@ export default function Orders() {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const companyId = "de4c3464-a06e-45a6-b1dd-2c03c2deb72c";
+  const companyId = "";
 
   const fetchOrders = async () => {
     setLoading(true);

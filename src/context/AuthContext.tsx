@@ -21,9 +21,19 @@ export interface User {
 export interface Company {
   id: string;
   tradeName: string;
+  legalName?: string;
+  companyType?: string;
   taxId: string;
-  city: string;
-  // podés agregar más campos si los vas a usar
+  taxRegistry?: string;
+  businessPurpose?: string;
+  companyEmail?: string;
+  companyPhone?: string;
+  fiscalAddress?: string;
+  city?: string;
+  state?: string;
+  representativeName?: string;
+  representativeDocument?: string;
+  incorporationDate?: string;
 }
 
 /* Nuevo: tipos para payload de registro */

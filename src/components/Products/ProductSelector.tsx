@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { getProducts } from "../services/products";
-import { Product } from "../types";
+import { getProducts } from "services/products";
+import { Product } from "types";
+
 
 export default function ProductSelector() {
   const [products, setProducts] = useState<Product[]>([]);

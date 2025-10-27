@@ -10,8 +10,8 @@ import {
   ClipboardList,
   LucideIcon,
 } from "lucide-react";
-import { useProducts } from "../context/ProductsContext";
-import type { Company } from "../types";
+import { useProducts } from "../../context/ProductsContext";
+import type { Company } from "../../types";
 
 const API_BASE =
   (process.env.REACT_APP_API_URL || process.env.VITE_API_URL || "").replace(/\/$/, "") ||

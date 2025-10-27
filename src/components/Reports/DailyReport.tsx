@@ -14,13 +14,11 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { getIncomes, getExpenses } from "../services/api";
+
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
+import { getExpenses, getIncomes } from "services/api";
 
-//
-// Tipos
-//
 export interface Transaction {
   time: string;           // ISO timestamp
   amount: number;

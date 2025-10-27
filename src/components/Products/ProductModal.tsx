@@ -1,6 +1,8 @@
+import { Product } from "context/ProductsContext";
 import React, { useEffect, useState } from "react";
-import { Product, OrderItemPayload } from "../types";
-import api from "../services/api";
+import api from "services/api";
+import { OrderItemPayload } from "types";
+
 
 interface Props {
   isOpen: boolean;

@@ -2,7 +2,7 @@
 import React from "react";
 import { Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import Sidebar from "./Sidebar";
+import Sidebar from "./ui/Sidebar";
 
 export default function ProtectedLayout() {
   const { logout, user } = useAuth();

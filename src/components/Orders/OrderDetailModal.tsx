@@ -1,7 +1,7 @@
 import React from "react";
-import { Order } from "../types";
+import { Order } from "../../types";
 import { pdf, Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../../context/AuthContext";
 
 interface Props {
   order: Order | null;

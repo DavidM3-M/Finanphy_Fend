@@ -6,9 +6,9 @@ import {
   deleteOrder,
   updateOrderStatus,
   Order,
-} from "../services/clientOrders";
-import OrderModal from "../components/OrderModal";
-import OrderDetailModal from "../components/OrderDetailModal";
+} from "../../services/clientOrders";
+import OrderModal from "../../components/Orders/OrderModal";
+import OrderDetailModal from "../../components/Orders/OrderDetailModal";
 import { format, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 

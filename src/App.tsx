@@ -8,13 +8,13 @@ import { ProductsProvider } from "./context/ProductsContext";
 // Páginas públicas
 import Login        from "./pages/auth/Login";
 import Register     from "./pages/auth/Register";
-import Unauthorized from "./components/Unauthorized";
-import NotFound     from "./components/NotFound";
+import Unauthorized from "./components/ui/Unauthorized";
+import NotFound     from "./components/ui/NotFound";
 
 // Layouts y protección
 import ProtectedLayout from "./components/ProtectedLayout";
 import PrivateRoute    from "./components/PrivateRoute";
-import LoadingSpinner  from "./components/LoadingSpinner";
+import LoadingSpinner  from "./components/ui/LoadingSpinner";
 
 // Páginas privadas
 import Dashboard     from "./pages/Dashboard";
@@ -22,7 +22,7 @@ import Facturacion   from "./pages/Facturacion";
 import Clasificacion from "./pages/Clasificacion";
 import DailyReports  from "./pages/DailyReports";
 import ProductsView  from "./pages/inventory/ProductsView";
-import Orders        from "./pages/Orders";
+import Orders        from "./pages/Orders/Orders";
 import CompanyCatalog from "./pages/CompanyCatalog";
 
 // Wrapper para catálogo público

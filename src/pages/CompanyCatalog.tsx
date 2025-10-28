@@ -1,63 +1,81 @@
+// src/pages/CompanyCatalog.tsx
 import React, { useEffect, useState } from "react";
 import { LayoutDashboard } from "lucide-react";
+import toast, { Toaster } from "react-hot-toast";
 import { useProducts } from "../context/ProductsContext";
 import { useCart } from "../context/CartContext";
+import api from "../services/api";
+import { Product } from "../types";
 
-/* ---------- Config (ajusta según tu infra) ---------- */
+/* Placeholder inline SVG */
 const INLINE_PLACEHOLDER =
   'data:image/svg+xml;utf8,' +
   encodeURIComponent(
     `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"><rect width="100%" height="100%" fill="#fff"/><text x="50%" y="50%" dy=".35em" text-anchor="middle" fill="#973c00" font-size="14">Sin imagen</text></svg>`
   );
+const PLACEHOLDER = INLINE_PLACEHOLDER;
 
 const getApiBase = () => {
   const raw = process.env.REACT_APP_API_URL || "";
   return raw.endsWith("/") ? raw.slice(0, -1) : raw;
 };
-
-// Ajusta si tus assets están en otro host (CDN/S3/CloudFront)
 const ASSET_BASE = (() => {
   const apiBase = getApiBase();
   return apiBase ? `${apiBase}/uploads/` : "/uploads/";
 })();
 
-const PLACEHOLDER = INLINE_PLACEHOLDER;
-
-/* ---------- Utilidades ---------- */
-async function validateImageUrl(url: string): Promise<boolean> {
+/* simple GET-based image check */
+async function isImageUrl(url: string): Promise<boolean> {
   try {
-    const head = await fetch(url, { method: "HEAD", mode: "cors", cache: "no-cache" });
-    if (head.ok) {
-      const ct = head.headers.get("content-type") || "";
-      return ct.startsWith("image/");
-    }
-    const get = await fetch(url, { method: "GET", mode: "cors", cache: "no-store" });
-    if (!get.ok) return false;
-    const ct = get.headers.get("content-type") || "";
+    const resp = await fetch(url, { method: "GET", mode: "cors", cache: "no-cache" });
+    if (!resp.ok) return false;
+    const ct = resp.headers.get("content-type") || "";
     return ct.startsWith("image/");
-  } catch (err) {
-    console.warn("validateImageUrl error", url, err);
+  } catch {
     return false;
   }
 }
 
 function buildImageCandidate(raw?: string | null) {
   if (!raw) return null;
-  const s = String(raw);
-  if (s.startsWith("http://") || s.startsWith("https://")) return s;
+  const s = String(raw).trim();
+  if (s === "") return null;
+  if (/^https?:\/\//i.test(s)) return s;
   if (s.startsWith("/")) return `${getApiBase()}${s}`;
   return `${ASSET_BASE}${s}`;
 }
 
-/* ---------- Componente (catálogo público) ---------- */
 export default function CompanyCatalog() {
   const { products, loading, error, companyId } = useProducts();
-  const { addItem } = useCart();
+  // useCart provides toggleOpen, items and addItem
+  const { addItem, items, toggleOpen } = useCart();
+  const [resolved, setResolved] = useState<Record<string, string | null>>({});
+  const [companyInfo, setCompanyInfo] = useState<{ tradeName?: string; companyEmail?: string; companyPhone?: string } | null>(null);
+  const [query, setQuery] = useState("");
   const [lightbox, setLightbox] = useState<{ src: string; name?: string } | null>(null);
 
-  // resolved map: productId -> valid URL or null (use placeholder)
-  const [resolved, setResolved] = useState<Record<string, string | null>>({});
+  // fetch explicit company info
+  useEffect(() => {
+    let mounted = true;
+    if (!companyId) return;
+    (async () => {
+      try {
+        const res = await api.get(`/companies/${companyId}`);
+        if (!mounted) return;
+        const d = res.data ?? res;
+        setCompanyInfo({
+          tradeName: d.tradeName ?? d.data?.tradeName,
+          companyEmail: d.companyEmail ?? d.data?.companyEmail,
+          companyPhone: d.companyPhone ?? d.data?.companyPhone,
+        });
+      } catch (err) {
+        console.warn("No se pudo obtener company info:", err);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [companyId]);
 
+  // resolve images in background
   useEffect(() => {
     let mounted = true;
     if (!products || products.length === 0) return;
@@ -69,21 +87,15 @@ export default function CompanyCatalog() {
           const id = String(p.id);
           if (resolved[id] !== undefined) return;
           const raw = p.imageUrl || p.image || (Array.isArray(p.images) ? p.images[0] : null) || p.media?.[0]?.url || null;
-          if (!raw) {
-            updates[id] = null;
-            return;
-          }
+          if (!raw) { updates[id] = null; return; }
           const candidate = buildImageCandidate(String(raw));
-          if (!candidate) {
-            updates[id] = null;
-            return;
-          }
-          // Validate candidate; if invalid try cache-bust; otherwise null
-          const ok = await validateImageUrl(candidate);
-          if (ok) { updates[id] = candidate; return; }
-          const busted = `${candidate}${candidate.includes("?") ? "&" : "?"}_t=${Date.now()}`;
-          const ok2 = await validateImageUrl(busted);
-          updates[id] = ok2 ? busted : null;
+          if (!candidate) { updates[id] = null; return; }
+          if (await isImageUrl(candidate)) { updates[id] = candidate; return; }
+          try {
+            const busted = `${candidate}${candidate.includes("?") ? "&" : "?"}_t=${Date.now()}`;
+            if (await isImageUrl(busted)) { updates[id] = busted; return; }
+          } catch {}
+          updates[id] = null;
         })
       );
       if (mounted) setResolved((prev) => ({ ...prev, ...updates }));
@@ -94,63 +106,110 @@ export default function CompanyCatalog() {
   }, [products]);
 
   if (!companyId || typeof companyId !== "string") {
-    console.warn("⚠️ companyId aún no está listo:", companyId);
-    return (
-      <div className="p-6 text-center text-gray-500">
-        Cargando empresa...
-      </div>
-    );
+    return <div className="p-6 text-center text-gray-500">Cargando empresa...</div>;
   }
 
-  const url = `https://finanphy.vercel.app/catalogo/${companyId}`;
+  const shareUrl = `https://finanphy.vercel.app/catalogo/${companyId}`;
 
-  const priceFormat = (value: number | string | undefined) => {
-    const num = typeof value === "number" ? value : Number(value || 0);
-    return num.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  const handleAdd = (p: Product) => {
+    const productForCart = { ...p, companyId: p.companyId ?? companyId } as Product & { companyId: string };
+    addItem(productForCart, 1);
+    toast.success?.(`${p.name} añadido al carrito`);
   };
 
-  return (
-    <>
-      {/* Header */}
-      <div className="p-6 border-b border-[#fef3c6] bg-[#fffbeb]">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-[#ffb900] rounded-lg">
-              <LayoutDashboard className="w-7 h-7 text-white" />
-            </div>
-            <div>
-              <h2 className="text-[#973c00] text-2xl font-bold">Finanphy</h2>
-              <p className="text-[#bb4d00] text-xs font-medium">Catálogo público</p>
-            </div>
-          </div>
+  const filtered = products?.filter((p: any) =>
+    p.name.toLowerCase().includes(query.toLowerCase()) || String(p.description ?? "").toLowerCase().includes(query.toLowerCase())
+  );
 
-          <div className="text-sm text-gray-700">
-            <p className="text-right">Compartir:</p>
-            <a className="text-[#ffb900] underline break-all" href={url} target="_blank" rel="noreferrer">{url}</a>
+  const totalCount = Array.isArray(items) ? items.reduce((s, it) => s + (it.quantity || 0), 0) : 0;
+
+  return (
+    <main className="min-h-screen bg-[#fffbeb] p-6">
+      <Toaster position="top-right" />
+
+      <header className="mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-[#ffb900] rounded-lg"><LayoutDashboard className="w-7 h-7 text-white" /></div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800">{companyInfo?.tradeName ?? "Catálogo"}</h1>
+            <p className="text-sm text-slate-500 mt-1">
+              Contacto: <span className="font-medium text-slate-700">{companyInfo?.companyPhone ?? "—"}</span>
+              {" · "}
+              Email: {companyInfo?.companyEmail ? (<a className="text-emerald-600 underline" href={`mailto:${companyInfo.companyEmail}`}>{companyInfo.companyEmail}</a>) : (<span className="text-slate-500">—</span>)}
+            </p>
           </div>
         </div>
-      </div>
 
-      {/* Productos */}
-      <div className="p-6">
+        <div className="flex items-center gap-4 w-full md:w-auto">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar producto..."
+            className="w-full md:w-64 px-3 py-2 rounded border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-200"
+            aria-label="Buscar productos"
+          />
+          <div className="ml-4 text-sm text-slate-700 hidden md:block">
+            Artículos en carrito: <span className="font-semibold">{totalCount}</span>
+          </div>
+
+          {/* ÚNICO botón de carrito local y determinista */}
+          <div>
+            <button
+              type="button"
+              onClick={() => toggleOpen(true)}
+              aria-label="Abrir carrito"
+              className="relative px-3 py-1 bg-amber-500 text-white rounded inline-flex items-center gap-2 hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-300"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden>
+                <path d="M3 3h2l.4 2M7 13h10l4-8H5.4" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="10" cy="20" r="1" />
+                <circle cx="18" cy="20" r="1" />
+              </svg>
+
+              <span className="text-sm">Carrito</span>
+
+              {totalCount > 0 && (
+                <span className="absolute -top-2 -right-2 bg-red-600 rounded-full w-5 h-5 text-xs flex items-center justify-center">
+                  {totalCount}
+                </span>
+              )}
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <section>
         {loading ? (
-          <p className="text-center text-gray-500">Cargando productos...</p>
+          <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <article key={i} className="bg-white rounded-lg shadow-sm overflow-hidden animate-pulse p-4">
+                <div className="w-full h-44 bg-gray-100 rounded mb-4" />
+                <div className="h-4 bg-gray-100 rounded w-3/4 mb-2" />
+                <div className="h-3 bg-gray-100 rounded w-1/2 mb-4" />
+                <div className="flex justify-between items-center">
+                  <div className="h-8 bg-gray-100 rounded w-24" />
+                  <div className="h-8 bg-gray-100 rounded w-20" />
+                </div>
+              </article>
+            ))}
+          </div>
         ) : error ? (
-          <p className="text-center text-red-500">Error: {error}</p>
-        ) : products.length === 0 ? (
-          <p className="text-center text-gray-500">Esta empresa no tiene productos públicos</p>
+          <div className="p-6 text-center text-red-500">Error: {String(error)}</div>
+        ) : !filtered || filtered.length === 0 ? (
+          <div className="p-6 text-center text-gray-500">No hay productos públicos</div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {products.map((p: any) => {
+          <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+            {filtered.map((p: any) => {
               const id = String(p.id);
               const raw = p.imageUrl || p.image || (Array.isArray(p.images) ? p.images[0] : null) || p.media?.[0]?.url || null;
-              const resolvedUrl = resolved[id] ?? null;
-              const img = resolvedUrl ?? (raw && (String(raw).startsWith("http://") || String(raw).startsWith("https://")) ? String(raw) : null) ?? PLACEHOLDER;
+              const resolvedUrl = resolved[id];
+              const isAbsoluteRaw = raw && /^https?:\/\//i.test(String(raw));
+              const img = resolvedUrl !== undefined ? (resolvedUrl ?? PLACEHOLDER) : isAbsoluteRaw ? String(raw) : PLACEHOLDER;
               const alt = p.name ? `Imagen de ${p.name}` : "Imagen de producto";
 
               return (
-                <article key={id} className="border rounded-lg overflow-hidden shadow-sm bg-white">
-                  <div className="w-full h-48 bg-gray-50 flex items-center justify-center overflow-hidden">
+                <article key={id} className="bg-white rounded-lg shadow-sm overflow-hidden transform transition hover:shadow-md hover:-translate-y-1 group">
+                  <div className="relative w-full h-44 overflow-hidden bg-gray-50">
                     <img
                       src={img}
                       alt={alt}
@@ -159,7 +218,6 @@ export default function CompanyCatalog() {
                       onClick={() => { if (img !== PLACEHOLDER) setLightbox({ src: img, name: p.name }); }}
                       onError={(e) => {
                         const t = e.currentTarget as HTMLImageElement;
-                        console.warn("Imagen catálogo fallida:", t.src, "productId:", id);
                         t.onerror = null;
                         try {
                           const src = t.src || "";
@@ -169,45 +227,46 @@ export default function CompanyCatalog() {
                         }
                         setTimeout(() => { if (t.src && t.src !== PLACEHOLDER && !t.complete) t.src = PLACEHOLDER; }, 1500);
                       }}
-                      className="w-full h-full object-cover cursor-zoom-in"
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 cursor-zoom-in"
                     />
+
+                    {p.stock === 0 && <span className="absolute top-3 right-3 px-2 py-0.5 text-xs rounded-full bg-slate-400 text-white">Agotado</span>}
+                    {p.isActive === false && <span className="absolute top-3 left-3 px-2 py-0.5 text-xs rounded-full bg-amber-500 text-white">Privado</span>}
+                    {p.createdAt && (Date.now() - new Date(p.createdAt).getTime() < 1000 * 60 * 60 * 24 * 30) && (
+                      <span className="absolute bottom-3 left-3 px-2 py-0.5 text-xs rounded-full bg-amber-500 text-white font-semibold">Nuevo</span>
+                    )}
                   </div>
 
                   <div className="p-4">
-                    <h3 className="font-semibold text-sm text-slate-900 truncate">{p.name}</h3>
-                    <p className="text-xs text-slate-500 mt-1">SKU: {p.sku ?? "—"}</p>
+                    <h3 className="text-sm font-medium text-slate-800 line-clamp-2">{p.name}</h3>
+                    <p className="text-xs text-slate-500 mt-1 line-clamp-2">{String(p.description ?? "").slice(0, 120)}</p>
 
                     <div className="mt-3 flex items-center justify-between">
                       <div>
-                        <div className="text-green-700 font-bold text-lg">${priceFormat(p.price)}</div>
-                        <div className="text-xs text-gray-500">Disponibles: {p.stock ?? 0}</div>
+                        <div className="text-lg font-semibold text-emerald-600">${priceFormat(p.price)}</div>
+                        {p.cost && <div className="text-xs line-through text-slate-400">${priceFormat(p.cost)}</div>}
                       </div>
 
-                      <div className="flex flex-col items-end gap-2">
+                      <div className="flex flex-col items-end">
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            addItem(p, 1);
-                          }}
-                          className="px-3 py-1 rounded-md bg-[#ffb900] text-white text-xs"
+                          onClick={(e) => { e.stopPropagation(); handleAdd(p as Product); }}
+                          disabled={!p.isActive || p.stock === 0}
+                          className="px-3 py-1 bg-amber-500 text-white rounded hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-300 text-sm"
+                          aria-label={`Añadir ${p.name} al carrito`}
                         >
                           Añadir
                         </button>
+                        <div className="text-xs text-slate-400 mt-2">{p.stock != null ? `${p.stock} disponibles` : "—"}</div>
                       </div>
                     </div>
-
-                    {p.description && (
-                      <p className="mt-3 text-xs text-slate-600 line-clamp-3">{p.description}</p>
-                    )}
                   </div>
                 </article>
               );
             })}
           </div>
         )}
-      </div>
+      </section>
 
-      {/* Lightbox modal */}
       {lightbox && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="max-w-3xl w-full bg-white rounded-lg overflow-hidden shadow-lg">
@@ -221,6 +280,12 @@ export default function CompanyCatalog() {
           </div>
         </div>
       )}
-    </>
+    </main>
   );
+}
+
+/* helper local */
+function priceFormat(value: number | string | undefined) {
+  const num = typeof value === "number" ? value : Number(value || 0);
+  return num.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }

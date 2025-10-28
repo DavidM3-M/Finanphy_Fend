@@ -128,7 +128,11 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
             <Text>Teléfono: {authCompany?.companyPhone ?? "N/D"}</Text>
           </View>
           <View>
-            <Text>Fecha: {new Date().toLocaleDateString()}</Text>
+            {/* Mostrar fecha/fecha-hora con zona explícita para evitar desajustes */}
+            <Text>
+              Fecha:{" "}
+              {new Date().toLocaleString("es-CO", { timeZone: "America/Bogota" })}
+            </Text>
             <Text>Descripción: {description || "-"}</Text>
           </View>
         </View>

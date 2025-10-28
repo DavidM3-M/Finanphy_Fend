@@ -74,7 +74,14 @@ api.interceptors.response.use(
 export interface MovimientoPayload {
   amount: number;
   category: string;
-  dueDate: string;
+  // Fecha del movimiento. Puede ser YYYY-MM-DD o ISO string.
+  entryDate?: string;
+  // Mantener compatibilidad con implementaciones antiguas que usan dueDate
+  dueDate?: string;
+  // Descripción / proveedor opcional
+  description?: string;
+  // cualquier otro campo que tu backend acepte
+  [key: string]: any;
 }
 
 // Tipo de respuesta de un movimiento

@@ -5,6 +5,10 @@ import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ProductsProvider } from "./context/ProductsContext";
 
+// Carrito (solo para catálogo público)
+import { CartProvider } from "./context/CartContext";               // ajusta ruta si necesario
+ // ajusta ruta si necesario
+
 // Páginas públicas
 import Login        from "./pages/auth/Login";
 import Register     from "./pages/auth/Register";
@@ -24,8 +28,11 @@ import DailyReports  from "./pages/DailyReports";
 import ProductsView  from "./pages/inventory/ProductsView";
 import Orders        from "./pages/Orders/Orders";
 import CompanyCatalog from "./pages/CompanyCatalog";
+import CartButton from "components/Orders/CardButton";
+import CartPanel from "components/Orders/CartPanel";
 
-// Wrapper para catálogo público
+
+// Wrapper para catálogo público (envuelve solo la rama pública con CartProvider)
 function PublicCatalogWrapper() {
   const { companyId } = useParams();
 
@@ -34,9 +41,22 @@ function PublicCatalogWrapper() {
   }
 
   return (
-    <ProductsProvider companyId={companyId} publicMode>
-      <CompanyCatalog />
-    </ProductsProvider>
+    <CartProvider>
+      <div className="min-h-screen bg-[#fffbeb]">
+        {/* Pequeño header local que muestra el botón del carrito */}
+        <header className="p-4 flex justify-end border-b border-[#fef3c6] bg-white">
+          <CartButton />
+        </header>
+
+        {/* Provider de productos + catálogo público */}
+        <ProductsProvider companyId={companyId} publicMode>
+          <CompanyCatalog />
+        </ProductsProvider>
+
+        {/* Panel del carrito (deslizable) */}
+        <CartPanel />
+      </div>
+    </CartProvider>
   );
 }
 
@@ -66,9 +86,8 @@ function AppRoutes() {
       {/* Rutas públicas */}
       <Route
         path="/"
-        element={token
-          ? <Navigate to="/app/dashboard" replace />
-          : <Navigate to="/auth/login" replace />
+        element={
+          token ? <Navigate to="/app/dashboard" replace /> : <Navigate to="/auth/login" replace />
         }
       />
       <Route path="/auth/login" element={<Login />} />
@@ -79,9 +98,8 @@ function AppRoutes() {
       {/* Redirección explícita para /app */}
       <Route
         path="/app"
-        element={token
-          ? <Navigate to="/app/dashboard" replace />
-          : <Navigate to="/auth/login" replace />
+        element={
+          token ? <Navigate to="/app/dashboard" replace /> : <Navigate to="/auth/login" replace />
         }
       />
 

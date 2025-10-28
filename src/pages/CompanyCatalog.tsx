@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { LayoutDashboard } from "lucide-react";
 import { useProducts } from "../context/ProductsContext";
+import { useCart } from "../context/CartContext";
 
 /* ---------- Config (ajusta según tu infra) ---------- */
 const INLINE_PLACEHOLDER =
@@ -51,6 +52,7 @@ function buildImageCandidate(raw?: string | null) {
 /* ---------- Componente (catálogo público) ---------- */
 export default function CompanyCatalog() {
   const { products, loading, error, companyId } = useProducts();
+  const { addItem } = useCart();
   const [lightbox, setLightbox] = useState<{ src: string; name?: string } | null>(null);
 
   // resolved map: productId -> valid URL or null (use placeholder)
@@ -160,7 +162,6 @@ export default function CompanyCatalog() {
                         console.warn("Imagen catálogo fallida:", t.src, "productId:", id);
                         t.onerror = null;
                         try {
-                          // try cache-bust once
                           const src = t.src || "";
                           t.src = src.includes("?") ? `${src}&_t=${Date.now()}` : `${src}?_t=${Date.now()}`;
                         } catch {
@@ -183,7 +184,15 @@ export default function CompanyCatalog() {
                       </div>
 
                       <div className="flex flex-col items-end gap-2">
-                        {/* Botón "Ver" eliminado según solicitud */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            addItem(p, 1);
+                          }}
+                          className="px-3 py-1 rounded-md bg-[#ffb900] text-white text-xs"
+                        >
+                          Añadir
+                        </button>
                       </div>
                     </div>
 

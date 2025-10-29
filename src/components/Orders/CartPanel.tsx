@@ -1,10 +1,13 @@
 // src/components/CartPanel.tsx
 import React, { useEffect, useRef, useState } from "react";
+import toast from "react-hot-toast";
 import { useCart } from "context/CartContext";
 
 export default function CartPanel() {
   const { items, open, toggleOpen, updateQuantity, removeItem, createOrder, adding, companyId } = useCart();
   const [notes, setNotes] = useState("");
+  const [orderCode, setOrderCode] = useState<string | null>(null);
+  const [showOrderModal, setShowOrderModal] = useState(false);
   const subtotal = items.reduce((s, it) => s + (Number(it.price) || 0) * (it.quantity || 0), 0);
   const panelRef = useRef<HTMLDivElement | null>(null);
 
@@ -30,13 +33,43 @@ export default function CartPanel() {
 
   const handleSendOrder = async () => {
     try {
-      await createOrder({ description: notes });
-      // adapt UX: replace alert with toast/modal in your app
-      alert("Orden enviada correctamente");
+      // createOrder should return useful info: { order, orderCode } or order object
+      const result: any = await createOrder({ description: notes });
+
+      // intentar extraer código generado por frontend o devuelto por backend
+      const code =
+        result?.orderCode ??
+        result?.order?.clientReference ??
+        result?.order?.client_reference ??
+        result?.order?.reference ??
+        result?.order?.id ??
+        result?.clientReference ??
+        result?.data?.clientReference ??
+        result?.data?.reference ??
+        result?.data?.id ??
+        null;
+
+      // Mostrar toast claro y amable; si hay código lo incluimos en el mensaje
+      if (code) {
+        setOrderCode(String(code));
+        toast.success(`Envío realizado — Código: ${String(code)}`, { duration: 6000 });
+      } else {
+        toast.success("Envío realizado", { duration: 4000 });
+      }
+
+      // limpiar UI y cerrar panel
       setNotes("");
+      toggleOpen(false);
+
+      // opcional: mostrar modal con el código (si quieres conservarlo)
+      if (code) {
+        setShowOrderModal(true);
+      }
     } catch (err: any) {
-      console.error(err);
-      alert(err?.message || "Error enviando orden");
+      console.error("Error creando orden:", err);
+      const msg = err?.response?.data?.message ?? err?.message ?? "Error enviando orden";
+      toast.error(msg);
+      // no cerrar el panel para permitir corrección
     }
   };
 
@@ -68,7 +101,6 @@ export default function CartPanel() {
           max-h-[85vh] overflow-auto
         `}
         style={{
-          // ensure appropriate sizing differences between mobile/desktop
           width: window.innerWidth < 768 ? "100%" : undefined,
           margin: window.innerWidth < 768 ? 0 : undefined,
         }}
@@ -171,6 +203,40 @@ export default function CartPanel() {
           </div>
         )}
       </aside>
+
+      {/* Modal con código de orden (opcional) */}
+      {showOrderModal && orderCode && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+          <div className="max-w-sm w-full bg-white rounded-lg shadow-lg p-6">
+            <h3 className="text-lg font-semibold mb-2">Orden creada</h3>
+            <p className="text-sm text-slate-600 mb-4">Código de la orden:</p>
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <div className="rounded-md bg-slate-100 px-3 py-2 text-sm font-mono break-all">{orderCode}</div>
+              <button
+                onClick={() => {
+                  navigator.clipboard?.writeText(orderCode);
+                  toast.success("Copiado al portapapeles");
+                }}
+                className="px-3 py-2 bg-amber-500 text-white rounded"
+              >
+                Copiar
+              </button>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  setShowOrderModal(false);
+                  setOrderCode(null);
+                }}
+                className="px-3 py-2 rounded bg-slate-100"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

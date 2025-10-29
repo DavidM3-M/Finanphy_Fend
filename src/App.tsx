@@ -7,7 +7,7 @@ import { ProductsProvider } from "./context/ProductsContext";
 
 // Carrito (solo para catálogo público)
 import { CartProvider } from "./context/CartContext";               // ajusta ruta si necesario
- // ajusta ruta si necesario
+
 
 // Páginas públicas
 import Login        from "./pages/auth/Login";
@@ -43,10 +43,6 @@ function PublicCatalogWrapper() {
   return (
     <CartProvider>
       <div className="min-h-screen bg-[#fffbeb]">
-        {/* Pequeño header local que muestra el botón del carrito */}
-        <header className="p-4 flex justify-end border-b border-[#fef3c6] bg-white">
-          <CartButton />
-        </header>
 
         {/* Provider de productos + catálogo público */}
         <ProductsProvider companyId={companyId} publicMode>

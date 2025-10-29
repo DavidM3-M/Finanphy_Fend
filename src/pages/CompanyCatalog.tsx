@@ -152,7 +152,6 @@ export default function CompanyCatalog() {
             Artículos en carrito: <span className="font-semibold">{totalCount}</span>
           </div>
 
-          {/* ÚNICO botón de carrito local y determinista */}
           <div>
             <button
               type="button"

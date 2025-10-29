@@ -1,3 +1,4 @@
+// src/context/CartContext.tsx
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { Product, OrderPayload } from "../types";
 import * as ordersService from "../services/clientOrders"; // ajusta path si necesario
@@ -20,7 +21,7 @@ type CartState = {
 };
 
 type CartActions = {
-  addItem: (p: Product, qty?: number) => void;
+  addItem: (p: Product, qty?: number, opts?: { open?: boolean }) => void;
   updateQuantity: (productId: string, qty: number) => void;
   removeItem: (productId: string) => void;
   clear: () => void;
@@ -61,15 +62,27 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("storage", onStorage);
   }, [state.items, state.companyId]);
 
-  const addItem = (p: Product, qty = 1) => {
+  // addItem: ahora no abre el panel por defecto.
+  const addItem = (p: Product, qty = 1, opts: { open?: boolean } = { open: false }) => {
     setState((s) => {
-      // If cart has companyId and differs from product, reset cart (prevent mixing companies)
       const prodCompany = p.companyId ?? null;
+
+      // If cart has companyId and differs from product, reset cart (prevent mixing companies)
       if (s.companyId && prodCompany && s.companyId !== prodCompany) {
         // simple policy: clear and start new cart for new company
         return {
-          items: [{ productId: p.id, name: p.name, price: Number(p.price) || 0, quantity: qty, image: p.imageUrl ?? null, sku: p.sku ?? null, companyId: prodCompany }],
-          open: true,
+          items: [
+            {
+              productId: p.id,
+              name: p.name,
+              price: Number(p.price) || 0,
+              quantity: qty,
+              image: (p as any).imageUrl ?? null,
+              sku: (p as any).sku ?? null,
+              companyId: prodCompany,
+            },
+          ],
+          open: !!opts.open,
           adding: s.adding,
           companyId: prodCompany,
         };
@@ -87,13 +100,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             name: p.name,
             price: Number(p.price) || 0,
             quantity: qty,
-            image: p.imageUrl ?? null,
-            sku: p.sku ?? null,
+            image: (p as any).imageUrl ?? null,
+            sku: (p as any).sku ?? null,
             companyId: prodCompany,
           },
         ];
       }
-      return { ...s, items: next, open: true, companyId: s.companyId ?? prodCompany };
+      return { ...s, items: next, open: !!opts.open || s.open, companyId: s.companyId ?? prodCompany };
     });
   };
 

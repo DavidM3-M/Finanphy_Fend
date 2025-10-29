@@ -32,18 +32,23 @@ export default function Login() {
         try {
           window.history.replaceState({}, document.title, cleanUrl);
         } catch {
-          try { sessionStorage.removeItem("authError"); } catch {}
+          try {
+            sessionStorage.removeItem("authError");
+          } catch {}
         }
         return;
       }
       const sMsg = sessionStorage.getItem("authError");
       if (sMsg) {
         setError(sMsg);
-        try { sessionStorage.removeItem("authError"); } catch {}
+        try {
+          sessionStorage.removeItem("authError");
+        } catch {}
       }
     } catch (e) {
       console.warn("Error leyendo authError:", e);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // solo al montar
 
   useEffect(() => {
@@ -52,17 +57,34 @@ export default function Login() {
     }
   }, [error]);
 
+  // PrivateRoute puso state.from = location; si no existe, fallback a dashboard
+  const fromLocation = (location.state as any)?.from;
+  const fallbackPath = "/app/dashboard";
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+
     try {
+      // login debe ser async y encargarse de persistir token/user en el contexto
       await login(email, password);
-      navigate("/app/dashboard");
+
+      // una vez que login completa y el contexto está actualizado, redirigimos
+      if (fromLocation && (fromLocation.pathname || fromLocation.search || fromLocation.hash)) {
+        const path = (fromLocation.pathname || "") + (fromLocation.search || "") + (fromLocation.hash || "");
+        navigate(path, { replace: true });
+      } else {
+        navigate(fallbackPath, { replace: true });
+      }
     } catch (err: any) {
       const msg = err?.message || "Credenciales inválidas";
-      try { sessionStorage.setItem("authError", msg); } catch {}
+      try {
+        sessionStorage.setItem("authError", msg);
+      } catch {}
+      // Mantener al usuario en la página de login y mostrar el error
       navigate("/auth/login", { replace: true, state: { authError: msg } });
+      setError(msg);
     } finally {
       setLoading(false);
     }

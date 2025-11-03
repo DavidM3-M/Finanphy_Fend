@@ -16,12 +16,7 @@ const SecondaryButton: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement>> =
   </button>
 );
 
-/**
- * Multi-step register: 0 Perfil, 1 Contraseña, 2 Empresa, 3 Revisar
- * - Toggle de contraseña posicionado un poco más arriba y sin caja
- * - Botones coherentes y redondeados
- * - Barra de robustez con espacio reservado
- */
+
 export default function Register() {
   const { register, isLoading } = useAuth();
   const navigate = useNavigate();
@@ -47,9 +42,6 @@ export default function Register() {
 
   // Company
   const [tradeName, setTradeName] = useState("");
-  const [legalName, setLegalName] = useState("");
-  const [companyType, setCompanyType] = useState("");
-  const [taxId, setTaxId] = useState("");
 
   const [errors, setErrors] = useState<{ [k: string]: string }>({});
   const [strength, setStrength] = useState("");
@@ -77,9 +69,7 @@ export default function Register() {
     if (step === 1) {
       return validatePassword(password) && password === confirm;
     }
-    if (step === 2) {
-      return tradeName.trim() !== "" && legalName.trim() !== "" && companyType.trim() !== "" && taxId.trim() !== "";
-    }
+  
     return true;
   };
 
@@ -97,9 +87,6 @@ export default function Register() {
       }
       if (step === 2) {
         if (!tradeName.trim()) setErrors((s) => ({ ...s, tradeName: "Requerido" }));
-        if (!legalName.trim()) setErrors((s) => ({ ...s, legalName: "Requerido" }));
-        if (!companyType.trim()) setErrors((s) => ({ ...s, companyType: "Requerido" }));
-        if (!taxId.trim()) setErrors((s) => ({ ...s, taxId: "Requerido" }));
       }
       return;
     }
@@ -152,9 +139,7 @@ export default function Register() {
 
     // Paso 2
     if (!tradeName.trim()) newErrors.tradeName = "Requerido";
-    if (!legalName.trim()) newErrors.legalName = "Requerido";
-    if (!companyType.trim()) newErrors.companyType = "Requerido";
-    if (!taxId.trim()) newErrors.taxId = "Requerido";
+    
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -171,9 +156,6 @@ export default function Register() {
       password,
       company: {
         tradeName: tradeName.trim(),
-        legalName: legalName.trim(),
-        companyType: companyType.trim(),
-        taxId: taxId.trim(),
       },
     };
 
@@ -320,15 +302,7 @@ export default function Register() {
 
               <input name="tradeName" placeholder="Nombre comercial (tradeName)" value={tradeName} onChange={(e) => { setTradeName(e.target.value); setErrors((s) => ({ ...s, tradeName: "" })); }} required className={`w-full px-4 py-2 rounded-lg bg-[#fffbeb] border ${errors.tradeName ? "border-red-500" : "border-[#fef3c6]"} focus:border-[#fe9a00] focus:ring-2 focus:ring-[#fee685]`} />
               {errors.tradeName && <p className="text-red-500 text-sm mt-1">{errors.tradeName}</p>}
-
-              <input name="legalName" placeholder="Razón social (legalName)" value={legalName} onChange={(e) => { setLegalName(e.target.value); setErrors((s) => ({ ...s, legalName: "" })); }} required className={`w-full px-4 py-2 rounded-lg bg-[#fffbeb] border ${errors.legalName ? "border-red-500" : "border-[#fef3c6]"} focus:border-[#fe9a00] focus:ring-2 focus:ring-[#fee685]`} />
-              {errors.legalName && <p className="text-red-500 text-sm mt-1">{errors.legalName}</p>}
-
-              <input name="companyType" placeholder="Tipo de empresa (companyType)" value={companyType} onChange={(e) => { setCompanyType(e.target.value); setErrors((s) => ({ ...s, companyType: "" })); }} required className={`w-full px-4 py-2 rounded-lg bg-[#fffbeb] border ${errors.companyType ? "border-red-500" : "border-[#fef3c6]"} focus:border-[#fe9a00] focus:ring-2 focus:ring-[#fee685]`} />
-              {errors.companyType && <p className="text-red-500 text-sm mt-1">{errors.companyType}</p>}
-
-              <input name="taxId" placeholder="NIT / taxId" value={taxId} onChange={(e) => { setTaxId(e.target.value); setErrors((s) => ({ ...s, taxId: "" })); }} required className={`w-full px-4 py-2 rounded-lg bg-[#fffbeb] border ${errors.taxId ? "border-red-500" : "border-[#fef3c6]"} focus:border-[#fe9a00] focus:ring-2 focus:ring-[#fee685]`} />
-              {errors.taxId && <p className="text-red-500 text-sm mt-1">{errors.taxId}</p>}
+              
             </div>
           )}
 
@@ -353,47 +327,6 @@ export default function Register() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm"><strong>Empresa:</strong> {tradeName}</p>
-                    <p className="text-sm"><strong>Razón social:</strong> {legalName}</p>
-                    <p className="text-sm"><strong>Tipo:</strong> {companyType}</p>
-                    <input
-                      name="taxId"
-                      inputMode="numeric"
-                      pattern="\d*"
-                      value={taxId}
-                      maxLength={20}
-                      onChange={(e) => {
-                        const digits = e.target.value.replace(/\D/g, "");
-                        setTaxId(digits);
-                        setErrors((s) => ({ ...s, taxId: digits === "" ? "Requerido" : "" }));
-                      }}
-                      onKeyDown={(e) => {
-                        const allowedKeys = ["Backspace","Delete","ArrowLeft","ArrowRight","Tab","Enter","Home","End"];
-                        if (allowedKeys.includes(e.key)) return;
-                        if (e.ctrlKey || e.metaKey) return;
-                        if (/^[0-9]$/.test(e.key)) return;
-                        e.preventDefault();
-                        setErrors((s) => ({ ...s, taxId: "Ingrese un registro válido" }));
-                      }}
-                      onPaste={(e) => {
-                        const text = e.clipboardData.getData("text");
-                        if (!/^\d+$/.test(text)) {
-                          e.preventDefault();
-                          const digits = text.replace(/\D/g, "");
-                          const el = e.currentTarget as HTMLInputElement;
-                          const start = el.selectionStart ?? 0;
-                          const end = el.selectionEnd ?? 0;
-                          const newValue = el.value.slice(0, start) + digits + el.value.slice(end);
-                          setTaxId(newValue.replace(/\D/g, ""));
-                          setErrors((s) => ({ ...s, taxId: digits === "" ? "Solo números" : "" }));
-                          requestAnimationFrame(() => {
-                            const pos = start + digits.length;
-                            el.setSelectionRange(pos, pos);
-                          });
-                        }
-                      }}
-                      placeholder="NIT / taxId"
-                      className={`w-full px-4 py-2 rounded-lg bg-[#fffbeb] border ${errors.taxId ? "border-red-500" : "border-[#fef3c6]"} focus:border-[#fe9a00] focus:ring-2 focus:ring-[#fee685]`}
-                    />
 
                     <div className="mt-1 text-sm" aria-live="polite">
                       {errors.taxId ? <span className="text-red-500">{errors.taxId}</span> : <span className="text-[#6b4a12]">Ingrese solo números</span>}

@@ -21,37 +21,24 @@ export interface User {
 export interface Company {
   id: string;
   tradeName: string;
-  legalName?: string;
-  companyType?: string;
-  taxId: string;
-  taxRegistry?: string;
-  businessPurpose?: string;
-  companyEmail?: string;
-  companyPhone?: string;
-  fiscalAddress?: string;
-  city?: string;
-  state?: string;
-  representativeName?: string;
-  representativeDocument?: string;
-  incorporationDate?: string;
+  legalName?: string | null;
+  companyType?: string | null;
+  taxId: string | null;
+  taxRegistry?: string | null;
+  businessPurpose?: string | null;
+  companyEmail?: string | null;
+  companyPhone?: string | null;
+  fiscalAddress?: string | null;
+  city?: string | null;
+  state?: string | null;
+  representativeName?: string | null;
+  representativeDocument?: string | null;
+  incorporationDate?: string | null;
 }
 
 /* Nuevo: tipos para payload de registro */
 export interface CreateCompanyPayload {
   tradeName: string;
-  legalName?: string;
-  companyType?: string;
-  taxId: string;
-  taxRegistry?: string;
-  businessPurpose?: string;
-  companyEmail?: string;
-  companyPhone?: string;
-  fiscalAddress?: string;
-  city?: string;
-  state?: string;
-  representativeName?: string;
-  representativeDocument?: string;
-  incorporationDate?: string;
 }
 
 export interface RegisterPayload {

@@ -44,6 +44,15 @@ const currency = (n: number) =>
     n
   );
 
+function datePartFromIso(iso?: string) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 const shortDate = (iso: string) => {
   try {
     return format(parseISO(iso), "EEE, dd MMM yyyy", { locale: es });
@@ -339,14 +348,14 @@ const DailyReports: React.FC = () => {
             amount: safeParseAmount(i.amount),
             type: "income" as const,
             supplier: i.supplier ?? i.description ?? "—",
-            datePart: String(i.dueDate ?? "").slice(0, 10),
+            datePart: String(i.entryDate ?? i.dueDate ?? i.createdAt ?? "").slice(0, 10)
           })),
           ...exRes.data.map((e: any) => ({
             time: e.createdAt,
             amount: safeParseAmount(e.amount),
             type: "expense" as const,
             supplier: e.supplier ?? e.description ?? "—",
-            datePart: String(e.dueDate ?? "").slice(0, 10),
+            datePart: String(e.entryDate ?? e.dueDate ?? e.createdAt ?? "").slice(0, 10)
           })),
         ] as TxWithDate[];
 

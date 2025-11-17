@@ -93,12 +93,16 @@ function mapToIngreso(i: any): Movimiento {
   };
 }
 function mapToGasto(e: any): Movimiento {
-  const due = e?.dueDate ?? "";
+  // Prefer entryDate, fall back to dueDate for backward compatibility
+  const entry = e?.entryDate ?? e?.dueDate ?? "";
+  const rawAmount = Number(e?.amount);
+  const amount = Number.isFinite(rawAmount) ? rawAmount : 0;
+
   return {
     id: Number(e.id),
-    amount: Number.isFinite(Number(e.amount)) ? parseFloat(e.amount) : 0,
+    amount,
     supplier: e.supplier ?? e.description ?? "—",
-    entryDate: typeof due === "string" ? due.slice(0, 10) : "",
+    entryDate: typeof entry === "string" ? entry.slice(0, 10) : "",
     createdAt: e.createdAt ?? "",
     tipo: "gasto",
     category: e.category ?? undefined,

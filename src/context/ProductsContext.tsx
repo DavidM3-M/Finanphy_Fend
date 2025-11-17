@@ -53,7 +53,7 @@ export const ProductsProvider: React.FC<ProductsProviderProps> = ({
     setError(null);
     try {
       const endpoint = publicMode
-        ? `/public/products/company/${companyId}` // ✅ endpoint corregido
+        ? `/public/products/company/${companyId}` 
         : `/products`;
 
       const res = await api.get<Product[]>(endpoint);

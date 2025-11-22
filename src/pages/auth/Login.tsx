@@ -221,6 +221,15 @@ export default function Login() {
                 Regístrate
               </button>
             </div>
+
+            <div className="w-full mt-3 text-center">
+              <button
+                onClick={() => navigate("/auth/forgot-password")}
+                className="text-sm underline text-[#7B3306] hover:opacity-80 transition"
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
+            </div>
           </div>
         </div>
       </div>

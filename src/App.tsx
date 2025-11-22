@@ -14,6 +14,7 @@ import Login        from "./pages/auth/Login";
 import Register     from "./pages/auth/Register";
 import Unauthorized from "./components/ui/Unauthorized";
 import NotFound     from "./components/ui/NotFound";
+import ForgotPassword from "./pages/auth/ForgotPassword";
 
 // Layouts y protección
 import ProtectedLayout from "./components/ProtectedLayout";
@@ -30,6 +31,7 @@ import Orders        from "./pages/Orders/Orders";
 import CompanyCatalog from "./pages/CompanyCatalog";
 import CartButton from "components/Orders/CardButton";
 import CartPanel from "components/Orders/CartPanel";
+import ResetPassword from "pages/auth/ResetPassword";
 
 
 // Wrapper para catálogo público (envuelve solo la rama pública con CartProvider)
@@ -90,6 +92,9 @@ function AppRoutes() {
       <Route path="/auth/register" element={<Register />} />
       <Route path="/catalogo/:companyId" element={<PublicCatalogWrapper />} />
       <Route path="/unauthorized" element={<Unauthorized />} />
+      <Route path="/auth/forgot-password" element={<ForgotPassword />} />
+      <Route path="/auth/reset-password" element={<ResetPassword />} />
+
 
       {/* Redirección explícita para /app */}
       <Route

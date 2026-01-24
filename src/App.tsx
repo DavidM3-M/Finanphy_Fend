@@ -30,7 +30,6 @@ import DailyReports  from "./pages/DailyReports";
 import ProductsView  from "./pages/inventory/ProductsView";
 import Orders        from "./pages/Orders/Orders";
 import CompanyCatalog from "./pages/CompanyCatalog";
-import CartButton from "components/Orders/CardButton";
 import CartPanel from "components/Orders/CartPanel";
 import ResetPassword from "pages/auth/ResetPassword";
 import Calendar from "./pages/Calendar";

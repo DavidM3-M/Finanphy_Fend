@@ -44,13 +44,6 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
     setSelected([...selected, { product, quantity: 1 }]);
   };
 
-  const handleQuantityChange = (index: number, value: number) => {
-    const updated = [...selected];
-    const max = updated[index].product.stock;
-    updated[index].quantity = Math.min(Math.max(1, value), max);
-    setSelected(updated);
-  };
-
   const handleRemove = (index: number) => {
     const updated = [...selected];
     updated.splice(index, 1);

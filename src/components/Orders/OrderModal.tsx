@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { createOrder } from "../../services/clientOrders";
 import { getProducts } from "../../services/products";
-import { Product } from "../../types";
+import { getCustomers } from "../../services/customers";
+import { Customer, Product } from "../../types";
 import { pdf, Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 import { useAuth } from "../../context/AuthContext";
 
@@ -13,22 +14,30 @@ interface Props {
 }
 
 export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Props) {
-  const { company: authCompany, token: authToken } = useAuth();
+  const { company: authCompany } = useAuth();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [selected, setSelected] = useState<{ product: Product; quantity: number }[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customerId, setCustomerId] = useState("");
 
   useEffect(() => {
     if (isOpen) {
       getProducts().then(setProducts);
+      if (authCompany?.id) {
+        getCustomers(authCompany.id).then((data) => setCustomers(Array.isArray(data) ? data : []));
+      } else {
+        setCustomers([]);
+      }
       setSelected([]);
       setSearchTerm("");
       setDescription("");
+      setCustomerId("");
     }
-  }, [isOpen]);
+  }, [isOpen, authCompany?.id]);
 
   const handleAdd = (product: Product) => {
     if (selected.find(i => i.product.id === product.id)) return;
@@ -76,6 +85,7 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
         description: description || undefined,
         // Forzar companyId desde el contexto de autenticación
         companyId: authCompany.id,
+        customerId: customerId || undefined,
       };
 
       // Si tu createOrder usa Authorization header, se mantiene el uso del token en servicios
@@ -201,6 +211,22 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
               className="w-full border rounded px-3 py-2"
               placeholder="Ej. Pedido urgente para cliente VIP"
             />
+          </div>
+
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Cliente</label>
+            <select
+              value={customerId}
+              onChange={(e) => setCustomerId(e.target.value)}
+              className="w-full border rounded px-3 py-2"
+            >
+              <option value="">Sin cliente</option>
+              {customers.map((customer) => (
+                <option key={customer.id} value={customer.id}>
+                  {customer.name}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 

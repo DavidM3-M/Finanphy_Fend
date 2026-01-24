@@ -31,4 +31,18 @@ export const deleteOrder = async (id: string): Promise<void> => {
   await api.delete(`/client-orders/${id}`, { headers: { ...authHeader() } });
 };
 
+export const uploadOrderInvoice = async (id: string, file: Blob, filename: string) => {
+  const formData = new FormData();
+  formData.append("invoice", file, filename);
+  const res = await api.post(`/client-orders/${id}/invoice`, formData, {
+    headers: { ...authHeader(), "Content-Type": "multipart/form-data" },
+  });
+  return res.data;
+};
+
+export const deleteOrderInvoice = async (id: string) => {
+  const res = await api.delete(`/client-orders/${id}/invoice`, { headers: { ...authHeader() } });
+  return res.data;
+};
+
 export type { Order, OrderPayload, OrderItemPayload };

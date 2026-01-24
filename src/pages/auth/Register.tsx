@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "context/AuthContext";
 import { Building2 } from "lucide-react";
+import toast from "react-hot-toast";
 
 /* Primary / Secondary Buttons (mover fuera del componente para estabilidad) */
 const PrimaryButton: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement>> = ({ children, ...p }) => (
@@ -161,6 +162,7 @@ export default function Register() {
 
     try {
       await register(payload);
+      toast.success("Registro exitoso. Inicia sesión para continuar.", { duration: 4000 });
       navigate("/auth/login");
     } catch (err: any) {
       const resp = err?.response?.data;

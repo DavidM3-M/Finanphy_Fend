@@ -33,6 +33,19 @@ export interface Product {
   companyId: string;
 }
 
+export interface Customer {
+  id: string;
+  companyId: string;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  documentId?: string | null;
+  address?: string | null;
+  notes?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface OrderItem {
   id: string;
   orderId: string;
@@ -62,8 +75,14 @@ export interface Order {
   userId: string;
   company: Company;
   user?: User;
+  customer?: Customer;
   items: OrderItem[];
   description?: string;
+  invoiceUrl?: string | null;
+  invoiceFilename?: string | null;
+  invoiceMime?: string | null;
+  invoiceSize?: number | null;
+  invoiceUploadedAt?: string | null;
 }
 
 export interface OrderItemPayload {
@@ -74,6 +93,7 @@ export interface OrderItemPayload {
 export interface OrderPayload {
   companyId: string;
   items: OrderItemPayload[];
+  customerId?: string;
 }
 
 // src/types/auth.ts

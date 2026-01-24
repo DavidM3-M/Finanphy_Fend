@@ -1,5 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import api from "../services/api";
+import { useAuth } from "../context/AuthContext";
+import { getCustomers } from "../services/customers";
 
 const formatoCOP = new Intl.NumberFormat("es-CO", {
   style: "currency",
@@ -8,16 +10,22 @@ const formatoCOP = new Intl.NumberFormat("es-CO", {
 });
 
 const Facturacion = () => {
+  const { company } = useAuth();
+  const companyId = company?.id;
+
   const [facturas, setFacturas] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [customers, setCustomers] = useState([]);
+  const [loadingCustomers, setLoadingCustomers] = useState(false);
 
   // Campos del formulario
   const [nuevaFactura, setNuevaFactura] = useState({
     descripcion: "",
     monto: "",
     fecha: "",
+    customerId: "",
   });
 
   // Obtener facturas
@@ -39,6 +47,28 @@ const Facturacion = () => {
     fetchFacturas();
   }, []);
 
+  useEffect(() => {
+    const loadCustomers = async () => {
+      if (!companyId) return;
+      setLoadingCustomers(true);
+      try {
+        const data = await getCustomers(companyId);
+        setCustomers(Array.isArray(data) ? data : []);
+      } catch (err) {
+        setCustomers([]);
+      } finally {
+        setLoadingCustomers(false);
+      }
+    };
+    loadCustomers();
+  }, [companyId]);
+
+  const customersMap = useMemo(() => {
+    const map = new Map();
+    customers.forEach((c) => map.set(c.id, c));
+    return map;
+  }, [customers]);
+
   // Manejo de formulario
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -52,9 +82,10 @@ const Facturacion = () => {
         descripcion: nuevaFactura.descripcion,
         monto: Number(nuevaFactura.monto),
         fecha: nuevaFactura.fecha,
+        customerId: nuevaFactura.customerId || undefined,
       });
       setModalOpen(false);
-      setNuevaFactura({ descripcion: "", monto: "", fecha: "" });
+      setNuevaFactura({ descripcion: "", monto: "", fecha: "", customerId: "" });
       fetchFacturas();
     } catch (err) {
       console.error(err);
@@ -86,6 +117,7 @@ const Facturacion = () => {
                 <th className="px-4 py-2">Descripción</th>
                 <th className="px-4 py-2">Monto</th>
                 <th className="px-4 py-2">Fecha</th>
+                <th className="px-4 py-2">Cliente</th>
               </tr>
             </thead>
             <tbody>
@@ -99,12 +131,19 @@ const Facturacion = () => {
                     <td className="px-4 py-2">
                       {new Date(factura.fecha).toLocaleDateString("es-CO")}
                     </td>
+                    <td className="px-4 py-2">
+                      {(() => {
+                        const customerId = factura.customerId || factura.customer?.id;
+                        const customer = customerId ? customersMap.get(customerId) : factura.customer;
+                        return customer?.name || "—";
+                      })()}
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
                   <td
-                    colSpan="3"
+                    colSpan="4"
                     className="text-center px-4 py-4 text-slate-500"
                   >
                     No hay facturas registradas.
@@ -154,6 +193,23 @@ const Facturacion = () => {
                   className="w-full p-2 border rounded mt-1"
                   required
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Cliente</label>
+                <select
+                  name="customerId"
+                  value={nuevaFactura.customerId}
+                  onChange={handleChange}
+                  className="w-full p-2 border rounded mt-1"
+                  disabled={loadingCustomers}
+                >
+                  <option value="">Sin cliente</option>
+                  {customers.map((customer) => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.name}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="flex justify-end gap-2 mt-4">
                 <button

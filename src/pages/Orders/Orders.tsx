@@ -1,6 +1,6 @@
 // src/pages/Orders.tsx
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import type { PaginatedMeta } from "../../types";
 import {
   getAllOrders,
@@ -258,7 +258,7 @@ export default function Orders() {
   const totalPages = meta?.totalPages ?? 1;
   const totalItems = meta?.total ?? filteredOrders.length;
 
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     setLoading(true);
     try {
       const res = await getAllOrders({
@@ -277,11 +277,12 @@ export default function Orders() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, pageSize]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     fetchOrders();
-  }, [page, pageSize, searchTerm, statusFilter, dateFrom, dateTo]);
+  }, [fetchOrders]);
 
   useEffect(() => {
     setPage(1);

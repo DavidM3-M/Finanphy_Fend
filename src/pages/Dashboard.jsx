@@ -1,6 +1,7 @@
 // src/pages/Dashboard.jsx
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import api from "../services/api";
+import { useAuth } from "../context/AuthContext";
 import {
   LineChart,
   Line,
@@ -18,6 +19,8 @@ import {
 
 /* Hook reutilizable: useResumen */
 function useResumen() {
+  const { company } = useAuth();
+  const companyId = company?.id;
   const [resumen, setResumen] = useState({
     ingresos: 0,
     gastos: 0,
@@ -32,12 +35,20 @@ function useResumen() {
     setError(null);
     try {
       const [incomesRes, expensesRes] = await Promise.all([
-        api.get("/incomes", { signal }),
-        api.get("/expenses", { signal }),
+        api.get("/incomes", { params: { page: 1, limit: 15, ...(companyId ? { companyId } : {}) }, signal }),
+        api.get("/expenses", { params: { page: 1, limit: 15, ...(companyId ? { companyId } : {}) }, signal }),
       ]);
 
-      const incomesData = Array.isArray(incomesRes?.data) ? incomesRes.data : [];
-      const expensesData = Array.isArray(expensesRes?.data) ? expensesRes.data : [];
+      const incomesData = Array.isArray(incomesRes?.data?.data)
+        ? incomesRes.data.data
+        : Array.isArray(incomesRes?.data)
+        ? incomesRes.data
+        : [];
+      const expensesData = Array.isArray(expensesRes?.data?.data)
+        ? expensesRes.data.data
+        : Array.isArray(expensesRes?.data)
+        ? expensesRes.data
+        : [];
 
       const ingresos = incomesData.reduce(
         (acc, item) => acc + Number.parseFloat(item.amount || 0),
@@ -88,7 +99,7 @@ function useResumen() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [companyId]);
 
   useEffect(() => {
     const controller = new AbortController();

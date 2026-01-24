@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import { Customer } from "../types";
+import type { Customer, PaginatedMeta } from "../types";
 import {
   createCustomer,
   deleteCustomer,
@@ -25,6 +25,9 @@ export default function Customers(): React.ReactElement {
   const [items, setItems] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+  const [meta, setMeta] = useState<PaginatedMeta | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -33,30 +36,38 @@ export default function Customers(): React.ReactElement {
     if (!companyId) return;
     setLoading(true);
     try {
-      const data = await getCustomers(companyId);
-      setItems(Array.isArray(data) ? data : []);
+      const res = await getCustomers({
+        companyId,
+        page,
+        limit: pageSize,
+        search: query.trim() || undefined,
+      });
+      setItems(Array.isArray(res?.data) ? res.data : []);
+      setMeta(res?.meta ?? null);
     } catch (err: any) {
       toast.error(err?.message ?? "No se pudieron cargar los clientes");
     } finally {
       setLoading(false);
     }
-  }, [companyId]);
+  }, [companyId, page, pageSize, query]);
 
   useEffect(() => {
     loadCustomers();
   }, [loadCustomers]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((c) =>
-      [c.name, c.email, c.phone, c.documentId]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-        .includes(q)
-    );
-  }, [items, query]);
+  useEffect(() => {
+    setPage(1);
+  }, [query]);
+
+  useEffect(() => {
+    if (meta?.totalPages && page > meta.totalPages) {
+      setPage(meta.totalPages);
+    }
+  }, [meta, page]);
+
+  const filtered = useMemo(() => items, [items]);
+  const totalPages = meta?.totalPages ?? 1;
+  const totalItems = meta?.total ?? filtered.length;
 
   const resetForm = () => {
     setForm(emptyForm);
@@ -81,12 +92,12 @@ export default function Customers(): React.ReactElement {
 
     try {
       if (editingId) {
-        const updated = await updateCustomer(editingId, payload);
-        setItems((prev) => prev.map((c) => (c.id === editingId ? updated : c)));
+        await updateCustomer(editingId, payload);
+        await loadCustomers();
         toast.success("Cliente actualizado");
       } else {
-        const created = await createCustomer(payload);
-        setItems((prev) => [created, ...prev]);
+        await createCustomer(payload);
+        await loadCustomers();
         toast.success("Cliente creado");
       }
       resetForm();
@@ -112,7 +123,7 @@ export default function Customers(): React.ReactElement {
     if (!window.confirm("¿Eliminar este cliente?")) return;
     try {
       await deleteCustomer(id);
-      setItems((prev) => prev.filter((c) => c.id !== id));
+      await loadCustomers();
       toast.success("Cliente eliminado");
     } catch (err: any) {
       toast.error(err?.message ?? "No se pudo eliminar");
@@ -199,6 +210,30 @@ export default function Customers(): React.ReactElement {
               </li>
             ))}
           </ul>
+        )}
+
+        {!loading && filtered.length > 0 && (
+          <div className="flex items-center justify-between mt-4 text-sm text-[#7b3306]">
+            <span>
+              Página {page} de {totalPages} · Total {totalItems}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="px-3 py-1 border rounded disabled:opacity-50"
+              >
+                Anterior
+              </button>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                className="px-3 py-1 border rounded disabled:opacity-50"
+              >
+                Siguiente
+              </button>
+            </div>
+          </div>
         )}
       </div>
 

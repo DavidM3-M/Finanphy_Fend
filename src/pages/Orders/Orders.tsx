@@ -1,6 +1,7 @@
 // src/pages/Orders.tsx
 
 import React, { useEffect, useState } from "react";
+import type { PaginatedMeta } from "../../types";
 import {
   getAllOrders,
   deleteOrder,
@@ -239,6 +240,9 @@ export default function Orders() {
   const [loading, setLoading] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+  const [meta, setMeta] = useState<PaginatedMeta | null>(null);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -251,12 +255,21 @@ export default function Orders() {
 
   const companyId = "";
 
+  const totalPages = meta?.totalPages ?? 1;
+  const totalItems = meta?.total ?? filteredOrders.length;
+
   const fetchOrders = async () => {
     setLoading(true);
     try {
-      const res = await getAllOrders();
-      setOrders(res.data || []);
-      setFilteredOrders(res.data || []);
+      const res = await getAllOrders({
+        page,
+        limit: pageSize,
+      });
+      const payload = res.data;
+      const list = Array.isArray(payload?.data) ? payload.data : [];
+      setOrders(list);
+      setFilteredOrders(list);
+      setMeta(payload?.meta ?? null);
     } catch (err) {
       console.error("Error al cargar órdenes:", err);
       setOrders([]);
@@ -268,7 +281,17 @@ export default function Orders() {
 
   useEffect(() => {
     fetchOrders();
-  }, []);
+  }, [page, pageSize, searchTerm, statusFilter, dateFrom, dateTo]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, statusFilter, dateFrom, dateTo]);
+
+  useEffect(() => {
+    if (meta?.totalPages && page > meta.totalPages) {
+      setPage(meta.totalPages);
+    }
+  }, [meta, page]);
 
   // applyFilters se mantiene y es consumido por el useEffect que sigue
   const applyFilters = () => {
@@ -308,8 +331,7 @@ export default function Orders() {
     try {
       setDeleting(true);
       await deleteOrder(id);
-      // actualizar solo orders; applyFilters se disparará por el efecto y actualizará filteredOrders
-      setOrders((prev) => prev.filter((o) => o.id !== id));
+      await fetchOrders();
       // cerrar detalle si estaba abierto
       setSelectedOrder((cur) => (cur?.id === id ? null : cur));
     } catch (err) {
@@ -473,6 +495,30 @@ export default function Orders() {
             </li>
           ))}
         </ul>
+      )}
+
+      {!loading && filteredOrders.length > 0 && (
+        <div className="flex items-center justify-between mt-6 text-sm text-gray-600">
+          <span>
+            Página {page} de {totalPages} · Total {totalItems}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="px-3 py-1 border rounded disabled:opacity-50"
+            >
+              Anterior
+            </button>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="px-3 py-1 border rounded disabled:opacity-50"
+            >
+              Siguiente
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Modal de confirmación para eliminar */}

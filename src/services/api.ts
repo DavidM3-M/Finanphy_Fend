@@ -1,6 +1,7 @@
 // src/services/api.ts
 
 import axios from "axios";
+import type { PaginatedResponse } from "../types";
 
 // 1) Base URL dinámica
 const BASE =
@@ -96,8 +97,18 @@ export interface Movimiento {
 }
 
 // Lectura
-export const getIncomes = () => api.get<Movimiento[]>("/incomes");
-export const getExpenses = () => api.get<Movimiento[]>("/expenses");
+export interface MovementsQuery {
+  page?: number;
+  limit?: number;
+  from?: string;
+  to?: string;
+  companyId?: string;
+}
+
+export const getIncomes = (params?: MovementsQuery) =>
+  api.get<PaginatedResponse<Movimiento>>("/incomes", { params });
+export const getExpenses = (params?: MovementsQuery) =>
+  api.get<PaginatedResponse<Movimiento>>("/expenses", { params });
 
 // Creación
 export const createIncome = (data: MovimientoPayload) =>

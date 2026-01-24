@@ -61,13 +61,24 @@ const DailyReportPage: React.FC<Props> = () => {
       setError(null);
       try {
         const [inRes, exRes] = await Promise.all([
-          getIncomes(),
-          getExpenses(),
+          getIncomes({ page: 1, limit: 100 }),
+          getExpenses({ page: 1, limit: 100 }),
         ]);
+
+        const incomes = Array.isArray(inRes.data?.data)
+          ? inRes.data.data
+          : Array.isArray(inRes.data)
+          ? inRes.data
+          : [];
+        const expenses = Array.isArray(exRes.data?.data)
+          ? exRes.data.data
+          : Array.isArray(exRes.data)
+          ? exRes.data
+          : [];
 
         // mapear a transactions con timestamp
         const allTxs: (Transaction & { datePart: string })[] = [
-          ...inRes.data.map((i: any) => {
+          ...incomes.map((i: any) => {
             const datePart = i.entryDate.slice(0, 10);
             return {
               time: i.createdAt,
@@ -77,7 +88,7 @@ const DailyReportPage: React.FC<Props> = () => {
               datePart,
             };
           }),
-          ...exRes.data.map((e: any) => {
+          ...expenses.map((e: any) => {
             const datePart = e.entryDate.slice(0, 10);
             return {
               time: e.createdAt,

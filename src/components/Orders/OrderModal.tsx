@@ -26,9 +26,13 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
 
   useEffect(() => {
     if (isOpen) {
-      getProducts().then(setProducts);
+      getProducts({ page: 1, limit: 100 }).then((res) =>
+        setProducts(Array.isArray(res?.data) ? res.data : [])
+      );
       if (authCompany?.id) {
-        getCustomers(authCompany.id).then((data) => setCustomers(Array.isArray(data) ? data : []));
+        getCustomers({ companyId: authCompany.id, page: 1, limit: 100 }).then((data) =>
+          setCustomers(Array.isArray(data?.data) ? data.data : [])
+        );
       } else {
         setCustomers([]);
       }

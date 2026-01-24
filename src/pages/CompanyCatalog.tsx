@@ -46,13 +46,15 @@ function buildImageCandidate(raw?: string | null) {
 }
 
 export default function CompanyCatalog() {
-  const { products, loading, error, companyId } = useProducts();
+  const { products, loading, error, companyId, loadProducts, meta } = useProducts();
   // useCart provides toggleOpen, items and addItem
   const { addItem, items, toggleOpen } = useCart();
   const [resolved, setResolved] = useState<Record<string, string | null>>({});
   const [companyInfo, setCompanyInfo] = useState<{ tradeName?: string; companyEmail?: string; companyPhone?: string } | null>(null);
   const [query, setQuery] = useState("");
   const [lightbox, setLightbox] = useState<{ src: string; name?: string } | null>(null);
+  const [page, setPage] = useState(1);
+  const pageSize = 16;
 
   // fetch explicit company info
   useEffect(() => {
@@ -105,6 +107,21 @@ export default function CompanyCatalog() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [products]);
 
+  useEffect(() => {
+    if (!companyId) return;
+    loadProducts({ page, limit: pageSize, search: query.trim() || undefined }).catch(() => undefined);
+  }, [companyId, loadProducts, page, pageSize, query]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [query]);
+
+  useEffect(() => {
+    if (meta?.totalPages && page > meta.totalPages) {
+      setPage(meta.totalPages);
+    }
+  }, [meta, page]);
+
   if (!companyId || typeof companyId !== "string") {
     return <div className="p-6 text-center text-gray-500">Cargando empresa...</div>;
   }
@@ -141,7 +158,10 @@ export default function CompanyCatalog() {
         <div className="flex items-center gap-4 w-full md:w-auto">
           <input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setPage(1);
+            }}
             placeholder="Buscar producto..."
             className="w-full md:w-64 px-3 py-2 rounded border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-200"
             aria-label="Buscar productos"
@@ -260,6 +280,30 @@ export default function CompanyCatalog() {
                 </article>
               );
             })}
+          </div>
+        )}
+
+        {meta && filtered.length > 0 && (
+          <div className="flex items-center justify-between mt-6 text-sm text-slate-600">
+            <span>
+              Página {page} de {meta.totalPages} · Total {meta.total}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="px-3 py-1 border rounded disabled:opacity-50"
+              >
+                Anterior
+              </button>
+              <button
+                onClick={() => setPage((p) => Math.min(meta.totalPages, p + 1))}
+                disabled={page >= meta.totalPages}
+                className="px-3 py-1 border rounded disabled:opacity-50"
+              >
+                Siguiente
+              </button>
+            </div>
           </div>
         )}
       </section>

@@ -33,8 +33,8 @@ const Facturacion = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get("/incomes");
-      const data = Array.isArray(res.data) ? res.data : res.data?.data || [];
+      const res = await api.get("/incomes", { params: { page: 1, limit: 50 } });
+      const data = Array.isArray(res.data?.data) ? res.data.data : Array.isArray(res.data) ? res.data : [];
       setFacturas(data);
     } catch (err) {
       setError(err.response?.data?.message || "Error al cargar facturas");
@@ -52,8 +52,8 @@ const Facturacion = () => {
       if (!companyId) return;
       setLoadingCustomers(true);
       try {
-        const data = await getCustomers(companyId);
-        setCustomers(Array.isArray(data) ? data : []);
+        const data = await getCustomers({ companyId, page: 1, limit: 200 });
+        setCustomers(Array.isArray(data?.data) ? data.data : []);
       } catch (err) {
         setCustomers([]);
       } finally {

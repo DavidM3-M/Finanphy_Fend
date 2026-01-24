@@ -52,10 +52,10 @@ const ACCEPTED_TYPES = /^image\/(jpeg|png|webp)$/i;
 const MAX_SIZE = 10 * 1024 * 1024; // 10MB
 
 const ProductsView: React.FC = () => {
-  const { products, loading, error, loadProducts } = useProducts();
+  const { products, loading, error, loadProducts, meta } = useProducts();
 
   const [filter, setFilter] = useState("");
-  const [page, setPage] = useState(0);
+  const [page, setPage] = useState(1);
   const pageSize = 9;
 
   const [showPanel, setShowPanel] = useState(false);
@@ -85,13 +85,16 @@ const ProductsView: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    loadProducts().catch((err) => console.error("loadProducts error", err));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    loadProducts({ page, limit: pageSize, search: filter || undefined }).catch((err) =>
+      console.error("loadProducts error", err)
+    );
+  }, [loadProducts, page, pageSize, filter]);
 
   useEffect(() => {
-    setPage(0);
-  }, [filter]);
+    if (meta?.totalPages && page > meta.totalPages) {
+      setPage(meta.totalPages);
+    }
+  }, [meta, page]);
 
   // Manage previewUrl and object URL lifecycle without premature revocation
   useEffect(() => {
@@ -140,6 +143,7 @@ const ProductsView: React.FC = () => {
 
   const filtered = useMemo(() => {
     const term = filter.toLowerCase();
+    if (!term) return products;
     return products.filter((p) => {
       return (
         (p.name || "").toString().toLowerCase().includes(term) ||
@@ -148,11 +152,10 @@ const ProductsView: React.FC = () => {
     });
   }, [products, filter]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const paginated = useMemo(
-    () => filtered.slice(page * pageSize, page * pageSize + pageSize),
-    [filtered, page]
-  );
+  const totalPages = meta?.totalPages ?? Math.max(1, Math.ceil(filtered.length / pageSize));
+  const paginated = meta
+    ? filtered
+    : filtered.slice((page - 1) * pageSize, page * pageSize);
 
   const getProductsData = () =>
     filtered.map((p) => ({
@@ -315,7 +318,7 @@ const ProductsView: React.FC = () => {
         if (returnedImage) setPreviewUrl(`${returnedImage}?v=${Date.now()}`);
       }
 
-      await loadProducts();
+      await loadProducts({ page, limit: pageSize, search: filter || undefined });
       setShowPanel(false);
       setLocalImageFile(null);
       setPreviewUrl(null);
@@ -339,7 +342,7 @@ const ProductsView: React.FC = () => {
           console.error("delete failed", res.status, body);
           throw new Error("delete failed");
         }
-        await loadProducts();
+        await loadProducts({ page, limit: pageSize, search: filter || undefined });
         setShowPanel(false);
       }
     } catch (err) {
@@ -393,7 +396,10 @@ const ProductsView: React.FC = () => {
           type="text"
           placeholder="Buscar por nombre o SKU…"
           value={filter}
-          onChange={(e) => setFilter(e.target.value)}
+          onChange={(e) => {
+            setFilter(e.target.value);
+            setPage(1);
+          }}
           className="flex-1 px-3 py-1.5 border border-[#fef3c6] rounded-lg bg-white text-sm"
         />
         <button
@@ -488,18 +494,18 @@ const ProductsView: React.FC = () => {
 
           <div className="flex justify-center items-center gap-4 mt-6">
             <button
-              onClick={() => setPage((p) => Math.max(p - 1, 0))}
-              disabled={page === 0}
+              onClick={() => setPage((p) => Math.max(p - 1, 1))}
+              disabled={page <= 1}
               className="px-3 py-1 border rounded disabled:opacity-50 text-sm"
             >
               Anterior
             </button>
             <span className="text-sm">
-              Página {page + 1} de {totalPages}
+              Página {page} de {totalPages}
             </span>
             <button
-              onClick={() => setPage((p) => Math.min(p + 1, totalPages - 1))}
-              disabled={page + 1 >= totalPages}
+              onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
+              disabled={page >= totalPages}
               className="px-3 py-1 border rounded disabled:opacity-50 text-sm"
             >
               Siguiente

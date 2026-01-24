@@ -13,7 +13,7 @@ import {
   startOfWeek,
   subMonths,
 } from "date-fns";
-import api, { Movimiento } from "../services/api";
+import api from "../services/api";
 import { getProducts } from "../services/products";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
@@ -98,12 +98,21 @@ export default function Calendar(): React.ReactElement {
   const [linkedIncomeId, setLinkedIncomeId] = useState<string | null>(null);
   const [linkedOrderId, setLinkedOrderId] = useState<string | null>(null);
 
-  const monthStart = startOfMonth(currentMonth);
-  const monthEnd = endOfMonth(currentMonth);
-  const gridStart = startOfWeek(monthStart, { weekStartsOn });
-  const gridEnd = endOfWeek(monthEnd, { weekStartsOn });
+  const monthStart = useMemo(() => startOfMonth(currentMonth), [currentMonth]);
+  const monthEnd = useMemo(() => endOfMonth(currentMonth), [currentMonth]);
+  const gridStart = useMemo(
+    () => startOfWeek(monthStart, { weekStartsOn }),
+    [monthStart]
+  );
+  const gridEnd = useMemo(
+    () => endOfWeek(monthEnd, { weekStartsOn }),
+    [monthEnd]
+  );
 
-  const monthLabel = format(currentMonth, "MMMM yyyy");
+  const monthLabel = useMemo(
+    () => format(currentMonth, "MMMM yyyy"),
+    [currentMonth]
+  );
 
   const itemsByDate = useMemo(() => {
     const map = new Map<string, CalendarItem[]>();
@@ -125,13 +134,13 @@ export default function Calendar(): React.ReactElement {
       const from = format(gridStart, "yyyy-MM-dd");
       const to = format(gridEnd, "yyyy-MM-dd");
 
-      const [eventsRes, remindersRes, incomesRes, expensesRes, products, ordersRes] = await Promise.all([
+      const [eventsRes, remindersRes, incomesRes, expensesRes, productsRes, ordersRes] = await Promise.all([
         api.get("/calendar/events", { params: { from, to, companyId } }).catch(() => ({ data: [] })),
         api.get("/reminders", { params: { from, to, companyId } }).catch(() => ({ data: [] })),
-        api.get<Movimiento[]>("/incomes").catch(() => ({ data: [] })),
-        api.get<Movimiento[]>("/expenses").catch(() => ({ data: [] })),
-        getProducts().catch(() => []),
-        getAllOrders().catch(() => ({ data: [] } as { data: Order[] })),
+        api.get("/incomes", { params: { page: 1, limit: 100 } }).catch(() => ({ data: [] })),
+        api.get("/expenses", { params: { page: 1, limit: 100 } }).catch(() => ({ data: [] })),
+        getProducts({ page: 1, limit: 100 }).catch(() => ({ data: [] })),
+        getAllOrders({ page: 1, limit: 100 }).catch(() => ({ data: { data: [] } })),
       ]);
 
       const eventsData = Array.isArray(eventsRes.data)
@@ -141,15 +150,25 @@ export default function Calendar(): React.ReactElement {
         ? remindersRes.data
         : remindersRes.data?.data ?? [];
 
-      const ordersList = Array.isArray((ordersRes as any).data)
+      const ordersList = Array.isArray((ordersRes as any).data?.data)
+        ? (ordersRes as any).data.data
+        : Array.isArray((ordersRes as any).data)
         ? (ordersRes as any).data
-        : (ordersRes as any)?.data?.data ?? [];
+        : [];
+
+      const products = Array.isArray((productsRes as any)?.data)
+        ? (productsRes as any).data
+        : [];
       const ordersById = new Map<string, Order>();
       ordersList.forEach((order: Order) => {
         if (order?.id) ordersById.set(order.id, order);
       });
 
-      const incomesList = Array.isArray(incomesRes.data) ? incomesRes.data : [];
+      const incomesList = Array.isArray((incomesRes as any)?.data?.data)
+        ? (incomesRes as any).data.data
+        : Array.isArray((incomesRes as any)?.data)
+        ? (incomesRes as any).data
+        : [];
       const incomesById = new Map<string, any>();
       incomesList.forEach((income: any) => {
         if (income?.id) incomesById.set(String(income.id), income);
@@ -213,7 +232,7 @@ export default function Calendar(): React.ReactElement {
 
       const interval = { start: gridStart, end: gridEnd };
 
-      for (const income of incomesRes.data ?? []) {
+      for (const income of incomesList) {
         const dateKey = pickDateField(income, ["entryDate", "createdAt", "date"]);
         if (!dateKey) continue;
         const dateObj = parseISO(dateKey);
@@ -234,7 +253,13 @@ export default function Calendar(): React.ReactElement {
         });
       }
 
-      for (const expense of expensesRes.data ?? []) {
+      const expensesList = Array.isArray((expensesRes as any)?.data?.data)
+        ? (expensesRes as any).data.data
+        : Array.isArray((expensesRes as any)?.data)
+        ? (expensesRes as any).data
+        : [];
+
+      for (const expense of expensesList) {
         const dateKey = pickDateField(expense, ["entryDate", "createdAt", "date"]);
         if (!dateKey) continue;
         const dateObj = parseISO(dateKey);
@@ -445,8 +470,8 @@ export default function Calendar(): React.ReactElement {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6">
-        <div className="bg-white rounded-2xl border border-[#fef3c6] shadow p-4">
+      <div className="space-y-6">
+        <div className="bg-white rounded-2xl border border-[#fef3c6] shadow p-4 relative">
           <div className="grid grid-cols-7 text-sm font-semibold text-[#7b3306] mb-3">
             {weekDays.map((label) => (
               <div key={label} className="text-center">
@@ -484,141 +509,141 @@ export default function Calendar(): React.ReactElement {
           </div>
 
           {loading && (
-            <div className="mt-4 text-sm text-[#bb4d00]">Cargando calendario...</div>
+            <div className="absolute inset-0 bg-white/70 backdrop-blur-sm rounded-2xl flex flex-col items-center justify-center gap-3">
+              <div className="h-10 w-10 rounded-full border-4 border-[#fef3c6] border-t-[#fe9a00] animate-spin" />
+              <div className="text-sm font-medium text-[#bb4d00]">Cargando calendario...</div>
+            </div>
+          )}
+        </div>
+        <div className="bg-white rounded-2xl border border-[#fef3c6] shadow p-4">
+          <h3 className="text-lg font-semibold text-[#973c00]">Detalle del día</h3>
+          <p className="text-sm text-[#bb4d00] mb-3">{format(selectedDate, "PPP")}</p>
+
+          {selectedItems.length === 0 ? (
+            <p className="text-sm text-[#7b3306]">Sin movimientos o eventos.</p>
+          ) : (
+            <div className="max-h-64 overflow-y-auto pr-1">
+              <ul className="space-y-2">
+                {selectedItems.map((item) => {
+                  const style = detailStyles[item.type];
+                  const isInvoice = item.type === "ingreso" || (item.type === "recordatorio" && !!item.attachmentUrl);
+                  const timeHint = getTimeHint(item);
+                  return (
+                    <li
+                      key={item.id}
+                      className={`group relative rounded-lg border p-2 ${style.card} ${isInvoice ? "cursor-pointer hover:shadow-sm" : ""}`}
+                      onClick={() => {
+                        if (isInvoice) setSelectedInvoice(item);
+                      }}
+                      role={isInvoice ? "button" : undefined}
+                      tabIndex={isInvoice ? 0 : undefined}
+                      onKeyDown={(e) => {
+                        if (!isInvoice) return;
+                        if (e.key === "Enter" || e.key === " ") setSelectedInvoice(item);
+                      }}
+                    >
+                      {timeHint && (
+                        <span className="absolute top-2 right-2 rounded-full bg-white/90 border border-[#fef3c6] px-2 py-0.5 text-[10px] font-medium text-[#7b3306] shadow-sm opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                          {timeHint}
+                        </span>
+                      )}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-sm font-semibold text-[#973c00]">{item.title}</div>
+                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${style.badge}`}>
+                          {item.type.toUpperCase()}
+                        </span>
+                      </div>
+                      {item.meta && (
+                        <div className="text-xs text-[#7b3306] mt-1">{item.meta}</div>
+                      )}
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {isInvoice && (
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-white border border-[#fef3c6] text-[#7b3306] hover:bg-[#fff7e6]"
+                          >
+                            📄 Ver factura
+                          </button>
+                        )}
+                        {item.attachmentUrl && (
+                          <a
+                            href={item.attachmentUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-white border border-[#fef3c6] text-[#7b3306] hover:bg-[#fff7e6]"
+                          >
+                            📎 {item.attachmentFilename ? "Ver adjunto" : "Adjunto"}
+                          </a>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
           )}
         </div>
 
-        <div className="space-y-4">
-          <div className="bg-white rounded-2xl border border-[#fef3c6] shadow p-4">
-            <h3 className="text-lg font-semibold text-[#973c00]">Detalle del día</h3>
-            <p className="text-sm text-[#bb4d00] mb-3">{format(selectedDate, "PPP")}</p>
-
-            {selectedItems.length === 0 ? (
-              <p className="text-sm text-[#7b3306]">Sin movimientos o eventos.</p>
-            ) : (
-              <div className="max-h-64 overflow-y-auto pr-1">
-                <ul className="space-y-2">
-                  {selectedItems.map((item) => {
-                    const style = detailStyles[item.type];
-                    const isInvoice = item.type === "ingreso" || (item.type === "recordatorio" && !!item.attachmentUrl);
-                    const timeHint = getTimeHint(item);
-                    return (
-                      <li
-                        key={item.id}
-                        className={`group relative rounded-lg border p-2 ${style.card} ${isInvoice ? "cursor-pointer hover:shadow-sm" : ""}`}
-                        onClick={() => {
-                          if (isInvoice) setSelectedInvoice(item);
-                        }}
-                        role={isInvoice ? "button" : undefined}
-                        tabIndex={isInvoice ? 0 : undefined}
-                        onKeyDown={(e) => {
-                          if (!isInvoice) return;
-                          if (e.key === "Enter" || e.key === " ") setSelectedInvoice(item);
-                        }}
-                      >
-                        {timeHint && (
-                          <span className="absolute top-2 right-2 rounded-full bg-white/90 border border-[#fef3c6] px-2 py-0.5 text-[10px] font-medium text-[#7b3306] shadow-sm opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-                            {timeHint}
-                          </span>
-                        )}
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="text-sm font-semibold text-[#973c00]">{item.title}</div>
-                          <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${style.badge}`}>
-                            {item.type.toUpperCase()}
-                          </span>
-                        </div>
-                        {item.meta && (
-                          <div className="text-xs text-[#7b3306] mt-1">{item.meta}</div>
-                        )}
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {isInvoice && (
-                            <button
-                              type="button"
-                              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-white border border-[#fef3c6] text-[#7b3306] hover:bg-[#fff7e6]"
-                            >
-                              📄 Ver factura
-                            </button>
-                          )}
-                          {item.attachmentUrl && (
-                            <a
-                              href={item.attachmentUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-white border border-[#fef3c6] text-[#7b3306] hover:bg-[#fff7e6]"
-                            >
-                              📎 {item.attachmentFilename ? "Ver adjunto" : "Adjunto"}
-                            </a>
-                          )}
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
+        <div className="bg-white rounded-2xl border border-[#fef3c6] shadow p-4">
+          <h3 className="text-lg font-semibold text-[#973c00]">Agregar recordatorio</h3>
+          <form onSubmit={handleReminderSubmit} className="space-y-3 mt-3">
+            <input
+              className="w-full px-3 py-2 rounded-lg border border-[#fef3c6] bg-[#fffbeb]"
+              placeholder="Título del recordatorio"
+              value={reminderTitle}
+              onChange={(e) => setReminderTitle(e.target.value)}
+              required
+            />
+            <input
+              className="w-full px-3 py-2 rounded-lg border border-[#fef3c6] bg-[#fffbeb]"
+              type="date"
+              value={reminderDate}
+              onChange={(e) => setReminderDate(e.target.value)}
+              required
+            />
+            <textarea
+              className="w-full px-3 py-2 rounded-lg border border-[#fef3c6] bg-[#fffbeb]"
+              placeholder="Notas adicionales (opcional)"
+              value={reminderNote}
+              onChange={(e) => setReminderNote(e.target.value)}
+              rows={3}
+            />
+            <div>
+              <label className="block text-sm text-[#7b3306] mb-1">Adjunto (imagen o PDF)</label>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,application/pdf"
+                onChange={(e) => setReminderFile(e.target.files?.[0] ?? null)}
+                className="w-full text-sm"
+              />
+              {reminderFile && (
+                <div className="text-xs text-[#7b3306] mt-1">{reminderFile.name}</div>
+              )}
+            </div>
+            <button
+              type="submit"
+              className="w-full px-3 py-2 rounded-lg bg-[#fe9a00] text-white font-semibold hover:bg-[#e27100]"
+            >
+              Crear recordatorio
+            </button>
+            {(linkedIncomeId || linkedOrderId) && (
+              <div className="text-xs text-[#7b3306]">
+                Vinculado a {linkedIncomeId ? `ingreso ${linkedIncomeId}` : ""}
+                {linkedIncomeId && linkedOrderId ? " y " : ""}
+                {linkedOrderId ? `orden ${linkedOrderId}` : ""}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLinkedIncomeId(null);
+                    setLinkedOrderId(null);
+                  }}
+                  className="ml-2 underline"
+                >
+                  Quitar vínculo
+                </button>
               </div>
             )}
-          </div>
-
-          <div className="bg-white rounded-2xl border border-[#fef3c6] shadow p-4">
-            <h3 className="text-lg font-semibold text-[#973c00]">Agregar recordatorio</h3>
-            <form onSubmit={handleReminderSubmit} className="space-y-3 mt-3">
-              <input
-                className="w-full px-3 py-2 rounded-lg border border-[#fef3c6] bg-[#fffbeb]"
-                placeholder="Título del recordatorio"
-                value={reminderTitle}
-                onChange={(e) => setReminderTitle(e.target.value)}
-                required
-              />
-              <input
-                className="w-full px-3 py-2 rounded-lg border border-[#fef3c6] bg-[#fffbeb]"
-                type="date"
-                value={reminderDate}
-                onChange={(e) => setReminderDate(e.target.value)}
-                required
-              />
-              <textarea
-                className="w-full px-3 py-2 rounded-lg border border-[#fef3c6] bg-[#fffbeb]"
-                placeholder="Notas adicionales (opcional)"
-                value={reminderNote}
-                onChange={(e) => setReminderNote(e.target.value)}
-                rows={3}
-              />
-              <div>
-                <label className="block text-sm text-[#7b3306] mb-1">Adjunto (imagen o PDF)</label>
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,application/pdf"
-                  onChange={(e) => setReminderFile(e.target.files?.[0] ?? null)}
-                  className="w-full text-sm"
-                />
-                {reminderFile && (
-                  <div className="text-xs text-[#7b3306] mt-1">{reminderFile.name}</div>
-                )}
-              </div>
-              <button
-                type="submit"
-                className="w-full px-3 py-2 rounded-lg bg-[#fe9a00] text-white font-semibold hover:bg-[#e27100]"
-              >
-                Crear recordatorio
-              </button>
-              {(linkedIncomeId || linkedOrderId) && (
-                <div className="text-xs text-[#7b3306]">
-                  Vinculado a {linkedIncomeId ? `ingreso ${linkedIncomeId}` : ""}
-                  {linkedIncomeId && linkedOrderId ? " y " : ""}
-                  {linkedOrderId ? `orden ${linkedOrderId}` : ""}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLinkedIncomeId(null);
-                      setLinkedOrderId(null);
-                    }}
-                    className="ml-2 underline"
-                  >
-                    Quitar vínculo
-                  </button>
-                </div>
-              )}
-            </form>
-          </div>
+          </form>
         </div>
       </div>
 

@@ -44,15 +44,6 @@ const currency = (n: number) =>
     n
   );
 
-function datePartFromIso(iso?: string) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
 const shortDate = (iso: string) => {
   try {
     return format(parseISO(iso), "EEE, dd MMM yyyy", { locale: es });

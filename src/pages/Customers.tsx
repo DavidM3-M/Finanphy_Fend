@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { Customer } from "../types";
 import {
@@ -29,7 +29,7 @@ export default function Customers(): React.ReactElement {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
 
-  const loadCustomers = async () => {
+  const loadCustomers = useCallback(async () => {
     if (!companyId) return;
     setLoading(true);
     try {
@@ -40,11 +40,11 @@ export default function Customers(): React.ReactElement {
     } finally {
       setLoading(false);
     }
-  };
+  }, [companyId]);
 
   useEffect(() => {
     loadCustomers();
-  }, [companyId]);
+  }, [loadCustomers]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

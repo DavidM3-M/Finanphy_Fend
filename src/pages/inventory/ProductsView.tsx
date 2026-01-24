@@ -56,7 +56,7 @@ const ProductsView: React.FC = () => {
 
   const [filter, setFilter] = useState("");
   const [page, setPage] = useState(1);
-  const pageSize = 9;
+  const pageSize = 15;
 
   const [showPanel, setShowPanel] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);

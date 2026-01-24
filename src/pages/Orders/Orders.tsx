@@ -241,7 +241,7 @@ export default function Orders() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [page, setPage] = useState(1);
-  const pageSize = 10;
+  const pageSize = 15;
   const [meta, setMeta] = useState<PaginatedMeta | null>(null);
 
   const [searchTerm, setSearchTerm] = useState("");

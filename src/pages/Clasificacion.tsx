@@ -189,7 +189,7 @@ const Clasificacion: React.FC = () => {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
-  const pageSize = 50;
+  const pageSize = 15;
   const [meta, setMeta] = useState<PaginatedMeta | null>(null);
 
   const [form, setForm] = useState<FormState>({

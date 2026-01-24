@@ -1,14 +1,27 @@
 // src/services/orders.ts
 import api from "./api";
-import { Order, OrderPayload, OrderItemPayload } from "../types";
+import type { Order, OrderPayload, OrderItemPayload, PaginatedResponse } from "../types";
 
 function authHeader() {
   const token = localStorage.getItem("token") || "";
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-export const getAllOrders = async (): Promise<{ data: Order[] }> => {
-  return await api.get("/client-orders", { headers: { ...authHeader() } });
+export interface OrdersQuery {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  companyId?: string;
+}
+
+export const getAllOrders = async (params?: OrdersQuery) => {
+  return await api.get<PaginatedResponse<Order>>("/client-orders", {
+    params,
+    headers: { ...authHeader() },
+  });
 };
 
 export const getOrderById = async (id: string): Promise<{ data: Order }> => {

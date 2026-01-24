@@ -1,5 +1,5 @@
 import api from "./api";
-import { Customer } from "../types";
+import type { Customer, PaginatedResponse } from "../types";
 
 function authHeader() {
   const token = localStorage.getItem("token") || "";
@@ -11,9 +11,16 @@ export const createCustomer = async (payload: Partial<Customer>) => {
   return res.data;
 };
 
-export const getCustomers = async (companyId?: string) => {
-  const res = await api.get<Customer[]>("/customers", {
-    params: companyId ? { companyId } : undefined,
+export interface CustomersQuery {
+  companyId?: string;
+  page?: number;
+  limit?: number;
+  search?: string;
+}
+
+export const getCustomers = async (params?: CustomersQuery) => {
+  const res = await api.get<PaginatedResponse<Customer>>("/customers", {
+    params: params && params.companyId ? params : params,
     headers: { ...authHeader() },
   });
   return res.data;

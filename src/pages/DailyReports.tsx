@@ -326,22 +326,36 @@ const DailyReports: React.FC = () => {
   useEffect(() => {
     const fetchAndGroup = async () => {
       try {
-        const [inRes, exRes] = await Promise.all([getIncomes(), getExpenses()]);
+        const [inRes, exRes] = await Promise.all([
+          getIncomes({ page: 1, limit: 100 }),
+          getExpenses({ page: 1, limit: 100 }),
+        ]);
 
         const safeParseAmount = (v: any) => {
           const n = Number(v);
           return Number.isFinite(n) ? n : 0;
         };
 
+        const incomes = Array.isArray(inRes.data?.data)
+          ? inRes.data.data
+          : Array.isArray(inRes.data)
+          ? inRes.data
+          : [];
+        const expenses = Array.isArray(exRes.data?.data)
+          ? exRes.data.data
+          : Array.isArray(exRes.data)
+          ? exRes.data
+          : [];
+
         const allTx = [
-          ...inRes.data.map((i: any) => ({
+          ...incomes.map((i: any) => ({
             time: i.createdAt,
             amount: safeParseAmount(i.amount),
             type: "income" as const,
             supplier: i.supplier ?? i.description ?? "—",
             datePart: String(i.entryDate ?? i.dueDate ?? i.createdAt ?? "").slice(0, 10)
           })),
-          ...exRes.data.map((e: any) => ({
+          ...expenses.map((e: any) => ({
             time: e.createdAt,
             amount: safeParseAmount(e.amount),
             type: "expense" as const,

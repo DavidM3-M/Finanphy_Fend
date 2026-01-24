@@ -10,7 +10,9 @@ export default function ProductSelector() {
   >([]);
 
   useEffect(() => {
-    getProducts().then(setProducts);
+    getProducts({ page: 1, limit: 50 }).then((res) =>
+      setProducts(Array.isArray(res?.data) ? res.data : [])
+    );
   }, []);
 
   const handleAdd = (product: Product) => {

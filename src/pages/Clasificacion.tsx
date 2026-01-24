@@ -12,6 +12,7 @@ import {
   deleteExpense,
   MovimientoPayload,
 } from "../services/api";
+import type { PaginatedMeta } from "../types";
 
 /* Meses en español */
 const MONTH_NAMES_ES = [
@@ -187,6 +188,9 @@ const Clasificacion: React.FC = () => {
   const [filtroCategoria, setFiltroCategoria] = useState<string>("todos");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 50;
+  const [meta, setMeta] = useState<PaginatedMeta | null>(null);
 
   const [form, setForm] = useState<FormState>({
     amount: 0,
@@ -210,20 +214,37 @@ const Clasificacion: React.FC = () => {
   useEffect(() => {
     const fetchMovs = async () => {
       try {
-        const [inRes, exRes] = await Promise.all([getIncomes(), getExpenses()]);
-        const ingresos = Array.isArray(inRes.data)
-          ? inRes.data.map(mapToIngreso)
+        const [inRes, exRes] = await Promise.all([
+          getIncomes({ page, limit: pageSize }),
+          getExpenses({ page, limit: pageSize }),
+        ]);
+        const ingresosRaw = Array.isArray(inRes.data?.data)
+          ? inRes.data.data
+          : Array.isArray(inRes.data)
+          ? inRes.data
           : [];
-        const gastos = Array.isArray(exRes.data)
-          ? exRes.data.map(mapToGasto)
+        const gastosRaw = Array.isArray(exRes.data?.data)
+          ? exRes.data.data
+          : Array.isArray(exRes.data)
+          ? exRes.data
           : [];
+        const ingresos = ingresosRaw.map(mapToIngreso);
+        const gastos = gastosRaw.map(mapToGasto);
+        const total =
+          (inRes.data?.meta?.total ?? ingresos.length) +
+          (exRes.data?.meta?.total ?? gastos.length);
+        const totalPages = Math.max(
+          inRes.data?.meta?.totalPages ?? 1,
+          exRes.data?.meta?.totalPages ?? 1
+        );
+        setMeta({ page, limit: pageSize, total, totalPages });
         setMovimientos([...ingresos, ...gastos]);
       } catch (err) {
         console.error("Error cargando movimientos:", err);
       }
     };
     fetchMovs();
-  }, []);
+  }, [page, pageSize]);
 
   const categoryOptions = useMemo(() => {
     const setCat = new Set<string>();
@@ -283,13 +304,30 @@ const Clasificacion: React.FC = () => {
       setIsEditing(false);
       setEditingId(null);
       setShowForm(false);
-      const [inRes, exRes] = await Promise.all([getIncomes(), getExpenses()]);
-      const ingresos = Array.isArray(inRes.data)
-        ? inRes.data.map(mapToIngreso)
+      const [inRes, exRes] = await Promise.all([
+        getIncomes({ page, limit: pageSize }),
+        getExpenses({ page, limit: pageSize }),
+      ]);
+      const ingresosRaw = Array.isArray(inRes.data?.data)
+        ? inRes.data.data
+        : Array.isArray(inRes.data)
+        ? inRes.data
         : [];
-      const gastos = Array.isArray(exRes.data)
-        ? exRes.data.map(mapToGasto)
+      const gastosRaw = Array.isArray(exRes.data?.data)
+        ? exRes.data.data
+        : Array.isArray(exRes.data)
+        ? exRes.data
         : [];
+      const ingresos = ingresosRaw.map(mapToIngreso);
+      const gastos = gastosRaw.map(mapToGasto);
+      const total =
+        (inRes.data?.meta?.total ?? ingresos.length) +
+        (exRes.data?.meta?.total ?? gastos.length);
+      const totalPages = Math.max(
+        inRes.data?.meta?.totalPages ?? 1,
+        exRes.data?.meta?.totalPages ?? 1
+      );
+      setMeta({ page, limit: pageSize, total, totalPages });
       setMovimientos([...ingresos, ...gastos]);
     } catch (err: any) {
       console.error(
@@ -318,6 +356,16 @@ const Clasificacion: React.FC = () => {
     setDateTo("");
   };
 
+  useEffect(() => {
+    setPage(1);
+  }, [filtroTipo, filtroCategoria, dateFrom, dateTo]);
+
+  useEffect(() => {
+    if (meta?.totalPages && page > meta.totalPages) {
+      setPage(meta.totalPages);
+    }
+  }, [meta, page]);
+
   const requestDelete = (id: number, tipo: "ingreso" | "gasto") => {
     setSelected(null);
     setToDelete({ id, tipo });
@@ -336,13 +384,30 @@ const Clasificacion: React.FC = () => {
       } else {
         await deleteExpense(pending.id);
       }
-      const [inRes, exRes] = await Promise.all([getIncomes(), getExpenses()]);
-      const ingresos = Array.isArray(inRes.data)
-        ? inRes.data.map(mapToIngreso)
+      const [inRes, exRes] = await Promise.all([
+        getIncomes({ page, limit: pageSize }),
+        getExpenses({ page, limit: pageSize }),
+      ]);
+      const ingresosRaw = Array.isArray(inRes.data?.data)
+        ? inRes.data.data
+        : Array.isArray(inRes.data)
+        ? inRes.data
         : [];
-      const gastos = Array.isArray(exRes.data)
-        ? exRes.data.map(mapToGasto)
+      const gastosRaw = Array.isArray(exRes.data?.data)
+        ? exRes.data.data
+        : Array.isArray(exRes.data)
+        ? exRes.data
         : [];
+      const ingresos = ingresosRaw.map(mapToIngreso);
+      const gastos = gastosRaw.map(mapToGasto);
+      const total =
+        (inRes.data?.meta?.total ?? ingresos.length) +
+        (exRes.data?.meta?.total ?? gastos.length);
+      const totalPages = Math.max(
+        inRes.data?.meta?.totalPages ?? 1,
+        exRes.data?.meta?.totalPages ?? 1
+      );
+      setMeta({ page, limit: pageSize, total, totalPages });
       setMovimientos([...ingresos, ...gastos]);
     } catch (err) {
       console.error("Error eliminando:", err);
@@ -736,6 +801,30 @@ const Clasificacion: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {meta && (
+            <div className="flex items-center justify-between mt-3 text-xs text-slate-500">
+              <span>
+                Página {page} de {meta.totalPages} · Total {meta.total}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="px-2 py-1 border rounded disabled:opacity-50"
+                >
+                  Anterior
+                </button>
+                <button
+                  onClick={() => setPage((p) => Math.min(meta.totalPages, p + 1))}
+                  disabled={page >= meta.totalPages}
+                  className="px-2 py-1 border rounded disabled:opacity-50"
+                >
+                  Siguiente
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* listado */}
           <div>

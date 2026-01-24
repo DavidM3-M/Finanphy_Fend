@@ -7,6 +7,7 @@ import React, {
   useEffect,
 } from "react";
 import api from "../services/api";
+import type { PaginatedMeta, PaginatedResponse } from "../types";
 
 export interface Product {
   id: string;
@@ -25,7 +26,8 @@ interface ProductsContextData {
   loading: boolean;
   error: string | null;
   companyId: string;
-  loadProducts: () => Promise<void>;
+  meta: PaginatedMeta | null;
+  loadProducts: (params?: { page?: number; limit?: number; search?: string }) => Promise<void>;
   addProduct: (data: Omit<Product, "id">) => Promise<void>;
   editProduct: (id: Product["id"], data: Omit<Product, "id">) => Promise<void>;
   removeProduct: (id: Product["id"]) => Promise<void>;
@@ -47,17 +49,23 @@ export const ProductsProvider: React.FC<ProductsProviderProps> = ({
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [meta, setMeta] = useState<PaginatedMeta | null>(null);
 
-  const loadProducts = useCallback(async () => {
+  const loadProducts = useCallback(async (params?: { page?: number; limit?: number; search?: string }) => {
     setLoading(true);
     setError(null);
     try {
+      const page = params?.page ?? 1;
+      const limit = params?.limit ?? 20;
+      const search = params?.search?.trim() || undefined;
       const endpoint = publicMode
         ? `/public/products/company/${companyId}` 
         : `/products`;
-
-      const res = await api.get<Product[]>(endpoint);
-      setProducts(res.data);
+      const res = await api.get<PaginatedResponse<Product>>(endpoint, {
+        params: { page, limit, ...(search ? { search } : {}) },
+      });
+      setProducts(res.data?.data ?? []);
+      setMeta(res.data?.meta ?? null);
     } catch (err: any) {
       setError(err.response?.data?.message || "Error cargando productos");
     } finally {
@@ -103,7 +111,7 @@ export const ProductsProvider: React.FC<ProductsProviderProps> = ({
 
   useEffect(() => {
     if (companyId) {
-      loadProducts();
+      loadProducts().catch(() => undefined);
     }
   }, [companyId, loadProducts]);
 
@@ -114,6 +122,7 @@ export const ProductsProvider: React.FC<ProductsProviderProps> = ({
         loading,
         error,
         companyId,
+        meta,
         loadProducts,
         addProduct,
         editProduct,

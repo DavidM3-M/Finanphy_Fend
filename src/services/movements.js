@@ -8,7 +8,8 @@ import api from "./api";
 export const getRecentMovements = async (limit = 5) => {
   try {
     const response = await api.get(`/movimientos?limit=${limit}`);
-    return response.data;
+    const payload = response.data;
+    return Array.isArray(payload?.data) ? payload.data : payload;
   } catch (error) {
     console.error("Error al obtener movimientos recientes", error);
     throw error;

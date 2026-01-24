@@ -17,6 +17,18 @@ export interface Company {
   incorporationDate: string;
 }
 
+export interface PaginatedMeta {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  meta: PaginatedMeta;
+}
+
 export interface Product {
   id: string;
   name: string;

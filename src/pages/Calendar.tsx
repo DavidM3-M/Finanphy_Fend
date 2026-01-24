@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   addDays,
   addMonths,
@@ -117,7 +117,7 @@ export default function Calendar(): React.ReactElement {
   const selectedKey = format(selectedDate, "yyyy-MM-dd");
   const selectedItems = itemsByDate.get(selectedKey) ?? [];
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!companyId) return;
     setLoading(true);
     setError(null);
@@ -268,11 +268,11 @@ export default function Calendar(): React.ReactElement {
     } finally {
       setLoading(false);
     }
-  };
+  }, [companyId, gridStart, gridEnd]);
 
   useEffect(() => {
     loadData();
-  }, [companyId, currentMonth]);
+  }, [loadData]);
 
   const handleReminderSubmit = async (event: React.FormEvent) => {
     event.preventDefault();

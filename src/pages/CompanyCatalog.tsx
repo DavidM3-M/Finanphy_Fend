@@ -109,8 +109,6 @@ export default function CompanyCatalog() {
     return <div className="p-6 text-center text-gray-500">Cargando empresa...</div>;
   }
 
-  const shareUrl = `https://finanphy.vercel.app/catalogo/${companyId}`;
-
   const handleAdd = (p: Product) => {
     const productForCart = { ...p, companyId: p.companyId ?? companyId } as Product & { companyId: string };
     addItem(productForCart, 1);

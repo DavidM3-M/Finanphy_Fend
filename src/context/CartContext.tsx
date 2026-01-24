@@ -1,5 +1,5 @@
 // src/context/CartContext.tsx
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { Product, OrderPayload } from "../types";
 import * as ordersService from "../services/clientOrders"; // ajusta path si necesario
 
@@ -63,7 +63,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, [state.items, state.companyId]);
 
   // addItem: ahora no abre el panel por defecto.
-  const addItem = (p: Product, qty = 1, opts: { open?: boolean } = { open: false }) => {
+  const addItem = useCallback((p: Product, qty = 1, opts: { open?: boolean } = { open: false }) => {
     setState((s) => {
       const prodCompany = p.companyId ?? null;
 
@@ -108,30 +108,32 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       }
       return { ...s, items: next, open: !!opts.open || s.open, companyId: s.companyId ?? prodCompany };
     });
-  };
+  }, []);
 
-  const updateQuantity = (productId: string, qty: number) => {
+  const updateQuantity = useCallback((productId: string, qty: number) => {
     setState((s) => ({
       ...s,
       items: s.items
         .map((it) => (it.productId === productId ? { ...it, quantity: Math.max(0, qty) } : it))
         .filter((it) => it.quantity > 0),
     }));
-  };
+  }, []);
 
-  const removeItem = (productId: string) => {
+  const removeItem = useCallback((productId: string) => {
     setState((s) => {
       const nextItems = s.items.filter((it) => it.productId !== productId);
       const nextCompany = nextItems.length === 0 ? null : s.companyId;
       return { ...s, items: nextItems, companyId: nextCompany };
     });
-  };
+  }, []);
 
-  const clear = () => setState((s) => ({ ...s, items: [], companyId: null }));
+  const clear = useCallback(() => setState((s) => ({ ...s, items: [], companyId: null })), []);
 
-  const toggleOpen = (v?: boolean) => setState((s) => ({ ...s, open: typeof v === "boolean" ? v : !s.open }));
+  const toggleOpen = useCallback((v?: boolean) => {
+    setState((s) => ({ ...s, open: typeof v === "boolean" ? v : !s.open }));
+  }, []);
 
-  const createOrder = async (extras?: { description?: string }) => {
+  const createOrder = useCallback(async (extras?: { description?: string }) => {
     setState((s) => ({ ...s, adding: true }));
     try {
       if (state.items.length === 0) throw new Error("Carrito vacío");
@@ -154,11 +156,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       setState((s) => ({ ...s, adding: false }));
       throw err;
     }
-  };
+  }, [state.items, state.companyId]);
 
   const value = useMemo(
     () => ({ ...state, addItem, updateQuantity, removeItem, clear, toggleOpen, createOrder }),
-    [state]
+    [state, addItem, updateQuantity, removeItem, clear, toggleOpen, createOrder]
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

@@ -1,5 +1,6 @@
 import React from "react";
 import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
+import { Toaster } from "react-hot-toast";
 
 // Contextos
 import { AuthProvider, useAuth } from "./context/AuthContext";
@@ -32,6 +33,8 @@ import CompanyCatalog from "./pages/CompanyCatalog";
 import CartButton from "components/Orders/CardButton";
 import CartPanel from "components/Orders/CartPanel";
 import ResetPassword from "pages/auth/ResetPassword";
+import Calendar from "./pages/Calendar";
+import Customers from "./pages/Customers";
 
 
 // Wrapper para catálogo público (envuelve solo la rama pública con CartProvider)
@@ -62,6 +65,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <Toaster position="top-right" />
         <AppRoutes />
       </AuthProvider>
     </BrowserRouter>
@@ -124,6 +128,8 @@ function AppRoutes() {
         <Route path="facturacion" element={<Facturacion />} />
         <Route path="clasificacion" element={<Clasificacion />} />
         <Route path="reportes" element={<DailyReports />} />
+        <Route path="calendario" element={<Calendar />} />
+        <Route path="clientes" element={<Customers />} />
         <Route path="orders" element={<Orders />} />
         <Route path="inventario" element={<ProductsView />} />
         <Route path="*" element={<NotFound />} />

@@ -8,6 +8,8 @@ import {
   TrendingUp,
   BarChart3,
   ClipboardList,
+  CalendarDays,
+  Users,
   LucideIcon,
 } from "lucide-react";
 import { useProducts } from "../../context/ProductsContext";
@@ -23,6 +25,8 @@ const menuItems: MenuItem[] = [
   { path: "/app/inventario", label: "Inventario", icon: Package, description: "Control de stock" },
   { path: "/app/clasificacion", label: "Clasificación", icon: TrendingUp, description: "Ingresos y gastos" },
   { path: "/app/reportes", label: "Reportes", icon: BarChart3, description: "Análisis" },
+  { path: "/app/calendario", label: "Calendario", icon: CalendarDays, description: "Movimientos y recordatorios" },
+  { path: "/app/clientes", label: "Clientes", icon: Users, description: "Base de clientes" },
   { path: "/app/orders", label: "Órdenes", icon: ClipboardList, description: "Pedidos" },
 ];
 

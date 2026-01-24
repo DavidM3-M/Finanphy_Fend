@@ -1,19 +1,24 @@
-import React from "react";
+import React, { useRef, useState } from "react";
 import { Order } from "../../types";
 import { pdf, Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 import { useAuth } from "../../context/AuthContext";
+import { deleteOrderInvoice, uploadOrderInvoice } from "../../services/clientOrders";
 
 interface Props {
   order: Order | null;
   onClose: () => void;
+  onUpdated?: (updated: Order) => void;
 }
 
 interface ExtendedOrder extends Order {
   description?: string;
 }
 
-export default function OrderDetailModal({ order, onClose }: Props) {
+export default function OrderDetailModal({ order, onClose, onUpdated }: Props) {
   const { company: authCompany } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [deletingInvoice, setDeletingInvoice] = useState(false);
 
   if (!order) return null;
 
@@ -73,7 +78,7 @@ export default function OrderDetailModal({ order, onClose }: Props) {
           <View style={{ alignItems: "flex-end" }}>
             <Text>Fecha: {new Date(order.createdAt).toLocaleDateString()}</Text>
             <Text>
-              Cliente: {order.user?.firstName ?? ""} {order.user?.lastName ?? ""}
+              Cliente: {order.customer?.name ?? (`${order.user?.firstName ?? ""} ${order.user?.lastName ?? ""}`.trim() || "N/D")}
             </Text>
             <Text>Empresa: {companyToShow.tradeName}</Text>
             <Text>Email: {companyToShow.companyEmail ?? "N/D"}</Text>
@@ -144,6 +149,35 @@ export default function OrderDetailModal({ order, onClose }: Props) {
     }
   };
 
+  const handleUploadInvoice = async (file: File) => {
+    if (!order) return;
+    setUploading(true);
+    try {
+      const updated = await uploadOrderInvoice(order.id, file, file.name);
+      onUpdated?.({ ...order, ...updated });
+    } catch (err) {
+      console.error("Error subiendo factura:", err);
+      alert("No se pudo adjuntar la factura.");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleDeleteInvoice = async () => {
+    if (!order) return;
+    setDeletingInvoice(true);
+    try {
+      const updated = await deleteOrderInvoice(order.id);
+      onUpdated?.({ ...order, ...updated });
+    } catch (err) {
+      console.error("Error eliminando factura:", err);
+      alert("No se pudo eliminar la factura.");
+    } finally {
+      setDeletingInvoice(false);
+    }
+  };
+
   const handleDownloadPdf = async () => {
     try {
       const asPdf = pdf(<OrderPdfDocument />);
@@ -197,7 +231,7 @@ export default function OrderDetailModal({ order, onClose }: Props) {
                 <strong>Fecha:</strong> {new Date(order.createdAt).toLocaleDateString()}
               </p>
               <p>
-                <strong>Cliente:</strong> {order.user?.firstName ?? ""} {order.user?.lastName ?? ""}
+                <strong>Cliente:</strong> {order.customer?.name ?? (`${order.user?.firstName ?? ""} ${order.user?.lastName ?? ""}`.trim() || "N/D")}
               </p>
               <p>
                 <strong>Empresa:</strong> {companyToShow.tradeName}
@@ -216,6 +250,58 @@ export default function OrderDetailModal({ order, onClose }: Props) {
             </div>
 
             <div className="text-right font-bold text-[#973c00]">Total: COP {total.toLocaleString("es-CO")}</div>
+
+            <div className="mt-4 space-y-2">
+              <div className="text-sm text-gray-700 flex items-center gap-2">
+                <strong>Factura:</strong>
+                {order.invoiceUrl ? (
+                  <span className="text-xs text-[#7b3306]">
+                    {order.invoiceFilename ?? "Adjunto"}
+                  </span>
+                ) : (
+                  <span>Sin adjunto</span>
+                )}
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {order.invoiceUrl && (
+                  <a
+                    href={order.invoiceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3 py-1.5 rounded text-sm font-semibold bg-gradient-to-r from-[#f6c453] to-[#fe9a00] text-white shadow hover:from-[#f0b842] hover:to-[#e27b00]"
+                  >
+                    Ver factura
+                  </a>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="application/pdf,image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleUploadInvoice(file);
+                  }}
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="px-3 py-1.5 rounded text-sm font-semibold bg-gradient-to-r from-[#ffe08a] to-[#ffb900] text-[#7b3306] shadow hover:from-[#ffda70] hover:to-[#eaa200] disabled:opacity-60"
+                >
+                  {uploading ? "Subiendo..." : "Adjuntar factura"}
+                </button>
+                {order.invoiceUrl && (
+                  <button
+                    onClick={handleDeleteInvoice}
+                    disabled={deletingInvoice}
+                    className="px-3 py-1.5 bg-red-600 text-white rounded text-sm shadow hover:bg-red-700 disabled:opacity-60"
+                  >
+                    {deletingInvoice ? "Eliminando..." : "Eliminar factura"}
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 

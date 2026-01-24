@@ -7,9 +7,6 @@ import React, {
   useMemo,
 } from "react";
 import { useProducts, Product } from "../../context/ProductsContext";
-import Papa from "papaparse";
-import * as XLSX from "xlsx";
-import { saveAs } from "file-saver";
 import { motion, AnimatePresence } from "framer-motion";
 
 /**
@@ -153,31 +150,6 @@ const ProductsView: React.FC = () => {
     () => filtered.slice(page * pageSize, page * pageSize + pageSize),
     [filtered, page]
   );
-
-  const getProductsData = () =>
-    filtered.map((p) => ({
-      Nombre: p.name,
-      SKU: p.sku,
-      Precio: (p as any).price,
-      Costo: (p as any).cost,
-      Stock: (p as any).stock,
-      Descripción: (p as any).description ?? "",
-      Categoría: (p as any).category ?? "",
-      Imagen: (p as any).imageUrl ?? "",
-    }));
-
-  const exportProductsCSV = () => {
-    const csv = Papa.unparse(getProductsData());
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    saveAs(blob, "productos.csv");
-  };
-
-  const exportProductsExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(getProductsData());
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Productos");
-    XLSX.writeFile(wb, "productos.xlsx");
-  };
 
   const openNew = () => {
     setForm({

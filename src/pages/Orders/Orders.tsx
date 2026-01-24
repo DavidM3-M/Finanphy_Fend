@@ -1,6 +1,6 @@
 // src/pages/Orders.tsx
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   getAllOrders,
   deleteOrder,
@@ -15,11 +15,6 @@ import { es } from "date-fns/locale";
 import { pdf, Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 
 /* ---------- Helpers ---------- */
-const currency = (n: number) =>
-  new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP" }).format(
-    n
-  );
-
 const friendlyDate = (iso: string) => {
   try {
     return format(parseISO(iso), "EEE, d 'de' MMM yyyy", { locale: es });

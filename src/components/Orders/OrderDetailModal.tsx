@@ -196,7 +196,7 @@ export default function OrderDetailModal({ order, onClose, onUpdated }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 transition-opacity duration-300">
+    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-[9999] transition-opacity duration-300">
       <div className="bg-white p-6 rounded-lg w-full max-w-4xl shadow-xl transform transition-all duration-300 scale-100 translate-y-0">
         <h2 className="text-xl font-bold mb-6 text-[#973c00]">📄 Detalle de orden</h2>
 

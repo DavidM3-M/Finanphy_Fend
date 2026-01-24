@@ -1166,9 +1166,10 @@ const Clasificacion: React.FC = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center"
+            className="fixed inset-0 z-[9999] flex items-center justify-center"
           >
-            <div className="bg-white p-5 rounded-lg shadow-xl w-full max-w-md">
+            <div className="absolute inset-0 bg-black/50" />
+            <div className="relative bg-white p-5 rounded-lg shadow-xl w-full max-w-md">
               <h4 className="text-lg font-semibold mb-2">Detalle</h4>
               <p className="mb-1">
                 <strong>Proveedor:</strong> {selected.supplier}
@@ -1219,7 +1220,7 @@ const Clasificacion: React.FC = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center"
+            className="fixed inset-0 z-[9999] flex items-center justify-center"
           >
             <div className="absolute inset-0 bg-black/50" />
             <motion.div

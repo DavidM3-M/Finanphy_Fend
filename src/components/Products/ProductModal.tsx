@@ -22,7 +22,7 @@ export default function ProductModal({ isOpen, onClose, onAdd }: Props) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-[9999]">
       <div className="bg-white p-6 rounded-lg w-full max-w-xl shadow-xl">
         <h2 className="text-xl font-bold mb-4 text-[#973c00]">🛒 Seleccionar producto</h2>
         <ul className="space-y-3 max-h-80 overflow-y-auto">

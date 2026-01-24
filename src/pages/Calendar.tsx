@@ -54,6 +54,15 @@ interface ReminderPayload {
 function toDateKey(input?: string | Date | null): string | null {
   if (!input) return null;
   try {
+    if (typeof input === "string") {
+      const raw = input.trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+        const [y, m, d] = raw.split("-").map(Number);
+        const local = new Date(y, m - 1, d);
+        if (Number.isNaN(local.getTime())) return null;
+        return format(local, "yyyy-MM-dd");
+      }
+    }
     const dt = typeof input === "string" ? parseISO(input) : input;
     if (Number.isNaN(dt.getTime())) return null;
     return format(dt, "yyyy-MM-dd");
@@ -75,7 +84,20 @@ function resolveUrl(url?: string | null): string | undefined {
   if (!url) return undefined;
   if (/^https?:\/\//i.test(url)) return url;
   if (!API_BASE) return url;
-  return `${API_BASE}${url.startsWith("/") ? "" : "/"}${url}`;
+  if (!url.startsWith("/")) {
+    return `${API_BASE}/uploads/${url}`;
+  }
+  return `${API_BASE}${url}`;
+}
+
+function shiftDateKey(key: string, days: number) {
+  try {
+    const dt = parseISO(key);
+    if (Number.isNaN(dt.getTime())) return key;
+    return format(addDays(dt, days), "yyyy-MM-dd");
+  } catch {
+    return key;
+  }
 }
 
 export default function Calendar(): React.ReactElement {
@@ -233,7 +255,7 @@ export default function Calendar(): React.ReactElement {
       const interval = { start: gridStart, end: gridEnd };
 
       for (const income of incomesList) {
-        const dateKey = pickDateField(income, ["entryDate", "createdAt", "date"]);
+        const dateKey = pickDateField(income, ["entryDate", "dueDate", "date", "createdAt"]);
         if (!dateKey) continue;
         const dateObj = parseISO(dateKey);
         if (!isWithinInterval(dateObj, interval)) continue;
@@ -260,8 +282,9 @@ export default function Calendar(): React.ReactElement {
         : [];
 
       for (const expense of expensesList) {
-        const dateKey = pickDateField(expense, ["entryDate", "createdAt", "date"]);
-        if (!dateKey) continue;
+        const dateKeyRaw = pickDateField(expense, ["entryDate", "dueDate", "date", "createdAt"]);
+        if (!dateKeyRaw) continue;
+        const dateKey = shiftDateKey(dateKeyRaw, 1);
         const dateObj = parseISO(dateKey);
         if (!isWithinInterval(dateObj, interval)) continue;
         itemsCollected.push({
@@ -519,12 +542,12 @@ export default function Calendar(): React.ReactElement {
           <h3 className="text-lg font-semibold text-[#973c00]">Detalle del día</h3>
           <p className="text-sm text-[#bb4d00] mb-3">{format(selectedDate, "PPP")}</p>
 
-          {selectedItems.length === 0 ? (
-            <p className="text-sm text-[#7b3306]">Sin movimientos o eventos.</p>
-          ) : (
+            {selectedItems.length === 0 ? (
+              <p className="text-sm text-[#7b3306]">Sin movimientos o eventos.</p>
+            ) : (
             <div className="max-h-64 overflow-y-auto pr-1">
               <ul className="space-y-2">
-                {selectedItems.map((item) => {
+                  {selectedItems.map((item) => {
                   const style = detailStyles[item.type];
                   const isInvoice = item.type === "ingreso" || (item.type === "recordatorio" && !!item.attachmentUrl);
                   const timeHint = getTimeHint(item);

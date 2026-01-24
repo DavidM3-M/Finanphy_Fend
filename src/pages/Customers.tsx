@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import type { Customer, PaginatedMeta } from "../types";
+import type { Customer } from "../types";
 import {
   createCustomer,
   deleteCustomer,
@@ -27,7 +27,6 @@ export default function Customers(): React.ReactElement {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const pageSize = 15;
-  const [meta, setMeta] = useState<PaginatedMeta | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -36,20 +35,14 @@ export default function Customers(): React.ReactElement {
     if (!companyId) return;
     setLoading(true);
     try {
-      const res = await getCustomers({
-        companyId,
-        page,
-        limit: pageSize,
-        search: query.trim() || undefined,
-      });
-      setItems(Array.isArray(res?.data) ? res.data : []);
-      setMeta(res?.meta ?? null);
+      const data = await getCustomers(companyId);
+      setItems(Array.isArray(data) ? data : []);
     } catch (err: any) {
       toast.error(err?.message ?? "No se pudieron cargar los clientes");
     } finally {
       setLoading(false);
     }
-  }, [companyId, page, pageSize, query]);
+  }, [companyId]);
 
   useEffect(() => {
     loadCustomers();
@@ -59,15 +52,30 @@ export default function Customers(): React.ReactElement {
     setPage(1);
   }, [query]);
 
-  useEffect(() => {
-    if (meta?.totalPages && page > meta.totalPages) {
-      setPage(meta.totalPages);
-    }
-  }, [meta, page]);
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter((c) =>
+      [c.name, c.email, c.phone, c.documentId]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(q)
+    );
+  }, [items, query]);
 
-  const filtered = useMemo(() => items, [items]);
-  const totalPages = meta?.totalPages ?? 1;
-  const totalItems = meta?.total ?? filtered.length;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const totalItems = filtered.length;
+  const paginated = useMemo(
+    () => filtered.slice((page - 1) * pageSize, page * pageSize),
+    [filtered, page, pageSize]
+  );
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
 
   const resetForm = () => {
     setForm(emptyForm);
@@ -172,7 +180,7 @@ export default function Customers(): React.ReactElement {
           <div className="text-sm text-[#7b3306]">Sin clientes registrados.</div>
         ) : (
           <ul className="space-y-3">
-            {filtered.map((customer) => (
+            {paginated.map((customer) => (
               <li
                 key={customer.id}
                 className="rounded-xl border border-[#fef3c6] bg-[#fffbeb] p-3"
@@ -238,7 +246,7 @@ export default function Customers(): React.ReactElement {
       </div>
 
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 p-4">
           <div className="bg-white rounded-2xl shadow-lg w-full max-w-lg overflow-hidden flex flex-col">
             <div className="flex items-center justify-between px-4 py-3 border-b">
               <h3 className="text-lg font-semibold text-[#973c00]">

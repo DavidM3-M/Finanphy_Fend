@@ -131,7 +131,7 @@ export default function CompanyEditModal({ isOpen, onClose, company, onSave }: P
   };
 
   return (
-    <Dialog open={isOpen} onClose={onClose} className="fixed inset-0 z-50 flex items-center justify-center">
+    <Dialog open={isOpen} onClose={onClose} className="fixed inset-0 z-[9999] flex items-center justify-center">
       <Dialog.Panel className="bg-white p-6 rounded-lg shadow-xl w-full max-w-4xl">
         <Dialog.Title className="text-xl font-bold mb-4">Editar Compañía</Dialog.Title>
 

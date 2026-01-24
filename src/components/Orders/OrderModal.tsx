@@ -30,8 +30,8 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
         setProducts(Array.isArray(res?.data) ? res.data : [])
       );
       if (authCompany?.id) {
-        getCustomers({ companyId: authCompany.id, page: 1, limit: 100 }).then((data) =>
-          setCustomers(Array.isArray(data?.data) ? data.data : [])
+        getCustomers(authCompany.id).then((data) =>
+          setCustomers(Array.isArray(data) ? data : [])
         );
       } else {
         setCustomers([]);
@@ -194,7 +194,7 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-[9999]">
       <div className="bg-white rounded-lg w-full max-w-6xl shadow-xl max-h-screen flex flex-col">
         <div className="p-6 border-b">
           <h2 className="text-xl font-bold text-[#973c00] mb-4">Crear orden</h2>

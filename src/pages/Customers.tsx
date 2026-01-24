@@ -26,7 +26,7 @@ export default function Customers(): React.ReactElement {
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
-  const pageSize = 10;
+  const pageSize = 15;
   const [meta, setMeta] = useState<PaginatedMeta | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);

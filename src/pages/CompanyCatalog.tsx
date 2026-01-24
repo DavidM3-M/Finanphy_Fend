@@ -54,7 +54,7 @@ export default function CompanyCatalog() {
   const [query, setQuery] = useState("");
   const [lightbox, setLightbox] = useState<{ src: string; name?: string } | null>(null);
   const [page, setPage] = useState(1);
-  const pageSize = 16;
+  const pageSize = 15;
 
   // fetch explicit company info
   useEffect(() => {

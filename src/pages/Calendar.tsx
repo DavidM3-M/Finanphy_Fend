@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+// PDF rendering removed from calendar view to keep file focused on calendar UI
 import {
   addDays,
   addMonths,
   endOfMonth,
   endOfWeek,
   format,
+  
   isSameDay,
   isSameMonth,
   isWithinInterval,
@@ -19,6 +21,9 @@ import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
 import { getAllOrders } from "../services/clientOrders";
 import { Order } from "../types";
+import OrderDetailModal from "../components/Orders/OrderDetailModal";
+// Invoice PDF generation removed from calendar file to keep calendar focused on dates
+
 
 const API_BASE = (process.env.REACT_APP_API_URL || "").replace(/\/$/, "");
 
@@ -38,6 +43,7 @@ interface CalendarItem {
   source?: any;
   incomeId?: string;
   orderId?: string;
+  order?: Order;
 }
 
 interface ReminderPayload {
@@ -47,7 +53,7 @@ interface ReminderPayload {
   companyId?: string;
   allDay?: boolean;
   type?: string;
-  incomeId?: string;
+  incomeId?: number;
   orderId?: string;
 }
 
@@ -56,11 +62,23 @@ function toDateKey(input?: string | Date | null): string | null {
   try {
     if (typeof input === "string") {
       const raw = input.trim();
+      // If the string is already a plain date (YYYY-MM-DD), use it as local date
       if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-        const [y, m, d] = raw.split("-").map(Number);
-        const local = new Date(y, m - 1, d);
-        if (Number.isNaN(local.getTime())) return null;
-        return format(local, "yyyy-MM-dd");
+        return raw;
+      }
+      // If the string is an ISO datetime (contains 'T'), try to parse it as local
+      // by removing the timezone designator (Z or ±HH:MM) so it's interpreted as local time.
+      const tIndex = raw.indexOf("T");
+      if (tIndex > 0) {
+        const localLike = raw.replace(/(Z|[+-]\d{2}:\d{2})$/, "");
+        try {
+          const parsed = parseISO(localLike);
+          if (!Number.isNaN(parsed.getTime())) return format(parsed, "yyyy-MM-dd");
+        } catch {
+          // fallback to extracting date part below
+        }
+        const datePart = raw.substring(0, tIndex);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return datePart;
       }
     }
     const dt = typeof input === "string" ? parseISO(input) : input;
@@ -90,15 +108,7 @@ function resolveUrl(url?: string | null): string | undefined {
   return `${API_BASE}${url}`;
 }
 
-function shiftDateKey(key: string, days: number) {
-  try {
-    const dt = parseISO(key);
-    if (Number.isNaN(dt.getTime())) return key;
-    return format(addDays(dt, days), "yyyy-MM-dd");
-  } catch {
-    return key;
-  }
-}
+// Helper removed: not used after normalizing expense dates to their original value
 
 export default function Calendar(): React.ReactElement {
   const { company } = useAuth();
@@ -107,16 +117,24 @@ export default function Calendar(): React.ReactElement {
   const [currentMonth, setCurrentMonth] = useState<Date>(() => new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
 
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [items, setItems] = useState<CalendarItem[]>([]);
-  const [selectedInvoice, setSelectedInvoice] = useState<CalendarItem | null>(null);
+  
+  const [ordersState, setOrdersState] = useState<Order[]>([]);
+  const [calendarItems, setCalendarItems] = useState<CalendarItem[]>([]);
+  const [previewInvoiceUrl, setPreviewInvoiceUrl] = useState<string | null>(null);
+  const [previewOrder, setPreviewOrder] = useState<Order | null>(null);
+  const [selectedOrderDetail, setSelectedOrderDetail] = useState<Order | null>(null);
+  // selectedInvoice removed — calendar no longer shows day-detail modal
 
   const [reminderTitle, setReminderTitle] = useState("");
   const [reminderDate, setReminderDate] = useState("");
   const [reminderNote, setReminderNote] = useState("");
   const [reminderFile, setReminderFile] = useState<File | null>(null);
+  const [reminderUploading, setReminderUploading] = useState(false);
+  const [reminderAllDay, setReminderAllDay] = useState<boolean>(true);
+  const [reminderType, setReminderType] = useState<string>("");
   const [linkedIncomeId, setLinkedIncomeId] = useState<string | null>(null);
   const [linkedOrderId, setLinkedOrderId] = useState<string | null>(null);
 
@@ -136,17 +154,11 @@ export default function Calendar(): React.ReactElement {
     [currentMonth]
   );
 
-  const itemsByDate = useMemo(() => {
-    const map = new Map<string, CalendarItem[]>();
-    for (const item of items) {
-      if (!map.has(item.date)) map.set(item.date, []);
-      map.get(item.date)!.push(item);
-    }
-    return map;
-  }, [items]);
+  
 
   const selectedKey = format(selectedDate, "yyyy-MM-dd");
-  const selectedItems = itemsByDate.get(selectedKey) ?? [];
+  // selectedItems no longer used (day-detail removed)
+  const ordersForDay = ordersState.filter((o) => toDateKey(o.createdAt) === selectedKey);
 
   const loadData = useCallback(async () => {
     if (!companyId) return;
@@ -156,18 +168,14 @@ export default function Calendar(): React.ReactElement {
       const from = format(gridStart, "yyyy-MM-dd");
       const to = format(gridEnd, "yyyy-MM-dd");
 
-      const [eventsRes, remindersRes, incomesRes, expensesRes, productsRes, ordersRes] = await Promise.all([
-        api.get("/calendar/events", { params: { from, to, companyId } }).catch(() => ({ data: [] })),
+      const [remindersRes, incomesRes, expensesRes, productsRes, ordersRes] = await Promise.all([
         api.get("/reminders", { params: { from, to, companyId } }).catch(() => ({ data: [] })),
         api.get("/incomes", { params: { page: 1, limit: 100 } }).catch(() => ({ data: [] })),
         api.get("/expenses", { params: { page: 1, limit: 100 } }).catch(() => ({ data: [] })),
         getProducts({ page: 1, limit: 100 }).catch(() => ({ data: [] })),
         getAllOrders({ page: 1, limit: 100 }).catch(() => ({ data: { data: [] } })),
       ]);
-
-      const eventsData = Array.isArray(eventsRes.data)
-        ? eventsRes.data
-        : eventsRes.data?.data ?? [];
+      // events disabled — no events data fetched
       const remindersData = Array.isArray(remindersRes.data)
         ? remindersRes.data
         : remindersRes.data?.data ?? [];
@@ -177,6 +185,8 @@ export default function Calendar(): React.ReactElement {
         : Array.isArray((ordersRes as any).data)
         ? (ordersRes as any).data
         : [];
+      setOrdersState(ordersList);
+      console.debug("[Calendar] loaded orders:", ordersList.length, ordersList.slice(0, 3).map((o: any) => ({ id: o.id, createdAt: o.createdAt })));
 
       const products = Array.isArray((productsRes as any)?.data)
         ? (productsRes as any).data
@@ -199,6 +209,8 @@ export default function Calendar(): React.ReactElement {
       const itemsCollected: CalendarItem[] = [];
 
       const reminderIds = new Set<string>();
+      const reminderIncomeIds = new Set<string>();
+      const reminderOrderIds = new Set<string>();
 
       for (const reminder of remindersData) {
         const dateKey = pickDateField(reminder, ["remindAt", "date", "reminderDate", "scheduledFor", "createdAt"]);
@@ -207,6 +219,8 @@ export default function Calendar(): React.ReactElement {
         if (reminderId) reminderIds.add(reminderId);
         const reminderIncomeId = reminder.incomeId ? String(reminder.incomeId) : undefined;
         const reminderOrderId = reminder.orderId ? String(reminder.orderId) : undefined;
+        if (reminderIncomeId) reminderIncomeIds.add(reminderIncomeId);
+        if (reminderOrderId) reminderOrderIds.add(reminderOrderId);
         const incomeFromReminder = reminderIncomeId ? incomesById.get(reminderIncomeId) : null;
         const orderIdFromIncome = incomeFromReminder?.orderId ? String(incomeFromReminder.orderId) : undefined;
         const finalOrderId = reminderOrderId ?? orderIdFromIncome;
@@ -234,23 +248,7 @@ export default function Calendar(): React.ReactElement {
         });
       }
 
-      for (const event of eventsData) {
-        const eventType = String(event?.type ?? event?.category ?? "").toLowerCase();
-        const isReminder = eventType.includes("reminder") || eventType.includes("recordatorio");
-        const eventId = String(event.id ?? event._id ?? "");
-        if (isReminder) continue;
-        if (eventId && reminderIds.has(eventId)) continue;
-
-        const dateKey = pickDateField(event, ["date", "start", "startDate", "eventDate", "createdAt"]);
-        if (!dateKey) continue;
-        itemsCollected.push({
-          id: eventId || `${dateKey}-event-${Math.random()}`,
-          date: dateKey,
-          type: "evento",
-          title: event.title ?? event.name ?? "Evento",
-          meta: event.description ?? event.detail ?? "",
-        });
-      }
+      // Events have been disabled and are not included in the calendar items.
 
       const interval = { start: gridStart, end: gridEnd };
 
@@ -260,6 +258,10 @@ export default function Calendar(): React.ReactElement {
         const dateObj = parseISO(dateKey);
         if (!isWithinInterval(dateObj, interval)) continue;
         const incomeOrderId = (income as any)?.orderId ? String((income as any).orderId) : undefined;
+        // skip income if it's already represented by a reminder (avoid duplicate)
+        if (income?.id && reminderIncomeIds.has(String(income.id))) continue;
+        if (incomeOrderId && reminderOrderIds.has(incomeOrderId)) continue;
+
         const linkedOrder = incomeOrderId ? ordersById.get(incomeOrderId) : undefined;
         itemsCollected.push({
           id: String(income.id ?? `${dateKey}-income-${Math.random()}`),
@@ -270,6 +272,7 @@ export default function Calendar(): React.ReactElement {
           attachmentUrl: resolveUrl(linkedOrder?.invoiceUrl ?? undefined),
           attachmentFilename: linkedOrder?.invoiceFilename ?? undefined,
           source: income,
+          order: linkedOrder,
           incomeId: income?.id ? String(income.id) : undefined,
           orderId: incomeOrderId,
         });
@@ -282,9 +285,8 @@ export default function Calendar(): React.ReactElement {
         : [];
 
       for (const expense of expensesList) {
-        const dateKeyRaw = pickDateField(expense, ["entryDate", "dueDate", "date", "createdAt"]);
-        if (!dateKeyRaw) continue;
-        const dateKey = shiftDateKey(dateKeyRaw, 1);
+        const dateKey = pickDateField(expense, ["entryDate", "dueDate", "date", "createdAt"]);
+        if (!dateKey) continue;
         const dateObj = parseISO(dateKey);
         if (!isWithinInterval(dateObj, interval)) continue;
         itemsCollected.push({
@@ -310,7 +312,35 @@ export default function Calendar(): React.ReactElement {
         });
       }
 
-      setItems(itemsCollected);
+      // Map orders into calendar items so they appear on the calendar grid
+      for (const order of ordersList) {
+        const dateKey = toDateKey(order.createdAt) ?? toDateKey((order as any).created_at);
+        if (!dateKey) continue;
+        const dateObj = parseISO(dateKey);
+        if (!isWithinInterval(dateObj, interval)) continue;
+        // avoid duplicates if a reminder already references this order
+        if (reminderOrderIds.has(String(order.id))) continue;
+        const total = (order.items || []).reduce((sum: number, it: any) => {
+          const unit = Number(it.unitPrice) || 0;
+          const qty = Number(it.quantity) || 0;
+          return sum + unit * qty;
+        }, 0);
+        itemsCollected.push({
+          id: `order-${order.id}`,
+          date: dateKey,
+          type: "ingreso",
+          title: "Orden",
+          meta: total ? `+${total}` : undefined,
+          attachmentUrl: resolveUrl(order.invoiceUrl ?? undefined),
+          attachmentFilename: order.invoiceFilename ?? undefined,
+          source: order,
+          orderId: order.id,
+          order,
+        });
+      }
+
+      // set calendar items for rendering icons on days and other views
+      setCalendarItems(itemsCollected);
     } catch (err: any) {
       setError(err?.message ?? "No se pudieron cargar los datos del calendario");
     } finally {
@@ -327,31 +357,52 @@ export default function Calendar(): React.ReactElement {
     if (!reminderTitle.trim() || !reminderDate) return;
 
     try {
+      setReminderUploading(true);
       const payload: ReminderPayload = {
         title: reminderTitle.trim(),
         // usar hora local sin Z para evitar el desfase de día
         remindAt: `${reminderDate}T00:00:00`,
         note: reminderNote.trim() || undefined,
         companyId,
-        allDay: true,
-        incomeId: linkedIncomeId || undefined,
+        allDay: reminderAllDay ?? undefined,
+        type: reminderType || undefined,
+        incomeId: linkedIncomeId ? Number(linkedIncomeId) : undefined,
         orderId: linkedOrderId || undefined,
       };
 
-      const formData = new FormData();
-      formData.append("title", payload.title);
-      formData.append("remindAt", payload.remindAt);
-      if (payload.note) formData.append("note", payload.note);
-      if (payload.companyId) formData.append("companyId", payload.companyId);
-      if (payload.allDay !== undefined) formData.append("allDay", String(payload.allDay));
-      if (payload.type) formData.append("type", payload.type);
-      if (payload.incomeId) formData.append("incomeId", payload.incomeId);
-      if (payload.orderId) formData.append("orderId", payload.orderId);
-      if (reminderFile) formData.append("attachment", reminderFile);
+      // normalize remindAt to an ISO 8601 string (UTC)
+      const remindAtIso = new Date(`${reminderDate}T00:00:00Z`).toISOString();
 
-      await api.post("/reminders", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      if (!reminderFile) {
+        // Send JSON when there's no file so boolean fields remain typed
+        await api.post("/reminders", { ...payload, remindAt: remindAtIso });
+      } else {
+        const allowed = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+        if (!allowed.includes(reminderFile.type)) {
+          toast.error("Adjunto inválido: solo se permiten PDF o imágenes (jpeg/png/webp)");
+          setReminderUploading(false);
+          return;
+        }
+        const max = 10 * 1024 * 1024; // 10 MB
+        if (reminderFile.size > max) {
+          toast.error("Adjunto demasiado grande: máximo 10 MB");
+          setReminderUploading(false);
+          return;
+        }
+        const formData = new FormData();
+        // Append individual fields (backend schema rejects a 'payload' wrapper)
+        formData.append("title", reminderTitle.trim());
+        if (reminderNote.trim()) formData.append("note", reminderNote.trim());
+        formData.append("remindAt", remindAtIso);
+        if (companyId) formData.append("companyId", companyId);
+        // send allDay as string so multer treats it as a text field
+        formData.append("allDay", reminderAllDay ? "true" : "false");
+        if (reminderType) formData.append("type", reminderType);
+        if (linkedIncomeId) formData.append("incomeId", String(Number(linkedIncomeId)));
+        if (linkedOrderId) formData.append("orderId", linkedOrderId);
+        formData.append("attachment", reminderFile);
+        await api.post("/reminders", formData);
+      }
       toast.success("Recordatorio creado");
       setReminderTitle("");
       setReminderDate("");
@@ -359,91 +410,27 @@ export default function Calendar(): React.ReactElement {
       setReminderFile(null);
       setLinkedIncomeId(null);
       setLinkedOrderId(null);
+      setReminderUploading(false);
       loadData();
     } catch (err: any) {
-      toast.error(err?.message ?? "No se pudo crear el recordatorio");
+      console.error("Reminder submit error:", err?.response?.data ?? err);
+      const msg = err?.response?.data?.message || err?.message || "No se pudo crear el recordatorio";
+      toast.error(msg);
+      setReminderUploading(false);
     }
   };
 
-  const renderBadges = (dateKey: string) => {
-    const dayItems = itemsByDate.get(dateKey) ?? [];
-    if (dayItems.length === 0) return null;
-
-    const counts = dayItems.reduce(
-      (acc, item) => {
-        acc[item.type] = (acc[item.type] ?? 0) + 1;
-        return acc;
-      },
-      {} as Record<CalendarItemType, number>
-    );
-
-    const badge = (label: string, color: string) => (
-      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${color}`}>{label}</span>
-    );
-
-    return (
-      <div className="mt-2 flex flex-wrap gap-1">
-        {counts.ingreso ? badge(`+${counts.ingreso}`, "bg-emerald-100 text-emerald-700") : null}
-        {counts.gasto ? badge(`-${counts.gasto}`, "bg-rose-100 text-rose-700") : null}
-        {counts.producto ? badge(`P${counts.producto}`, "bg-blue-100 text-blue-700") : null}
-        {counts.recordatorio ? badge(`R${counts.recordatorio}`, "bg-amber-100 text-amber-700") : null}
-        {counts.evento ? badge(`E${counts.evento}`, "bg-purple-100 text-purple-700") : null}
-      </div>
-    );
-  };
-
-  const formatCurrency = (value: any) => {
-    const amount = Number(value);
-    if (!Number.isFinite(amount)) return "N/D";
-    return new Intl.NumberFormat("es-CO", {
-      style: "currency",
-      currency: "COP",
-      minimumFractionDigits: 0,
-    }).format(amount);
-  };
-
-  const formatDateTime = (value?: string) => {
-    if (!value) return null;
-    const dt = new Date(value);
-    if (Number.isNaN(dt.getTime())) return null;
-    return dt.toLocaleString("es-CO", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
-  };
-
-  const getTimeHint = (item: CalendarItem) => {
-    const source = item.source ?? {};
-    return (
-      formatDateTime(source.remindAt)
-      ?? formatDateTime(source.entryDate)
-      ?? formatDateTime(source.createdAt)
-      ?? null
-    );
-  };
+  // Badges removed — calendar cells no longer show daily notification dots
 
   const detailStyles: Record<CalendarItemType, { badge: string; card: string }> = {
-    ingreso: {
-      badge: "bg-emerald-100 text-emerald-700",
-      card: "border-emerald-200 bg-emerald-50",
-    },
-    gasto: {
-      badge: "bg-rose-100 text-rose-700",
-      card: "border-rose-200 bg-rose-50",
-    },
-    producto: {
-      badge: "bg-blue-100 text-blue-700",
-      card: "border-blue-200 bg-blue-50",
-    },
-    recordatorio: {
-      badge: "bg-amber-100 text-amber-700",
-      card: "border-amber-200 bg-amber-50",
-    },
-    evento: {
-      badge: "bg-purple-100 text-purple-700",
-      card: "border-purple-200 bg-purple-50",
-    },
+    ingreso: { badge: "bg-emerald-100 text-emerald-700", card: "border-emerald-200 bg-emerald-50" },
+    gasto: { badge: "bg-rose-100 text-rose-700", card: "border-rose-200 bg-rose-50" },
+    producto: { badge: "bg-blue-100 text-blue-700", card: "border-blue-200 bg-blue-50" },
+    recordatorio: { badge: "bg-amber-100 text-amber-700", card: "border-amber-200 bg-amber-50" },
+    evento: { badge: "bg-purple-100 text-purple-700", card: "border-purple-200 bg-purple-50" },
   };
+
+  
 
   const days: Date[] = [];
   let day = gridStart;
@@ -461,6 +448,57 @@ export default function Calendar(): React.ReactElement {
             Movimientos, productos y recordatorios en un solo lugar
           </p>
         </div>
+      {previewInvoiceUrl && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <h3 className="text-lg font-semibold text-[#973c00]">Factura (backend)</h3>
+              <button
+                onClick={() => {
+                  setPreviewInvoiceUrl(null);
+                  setPreviewOrder(null);
+                }}
+                className="text-gray-500"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-3 overflow-auto grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="col-span-1 md:col-span-1 space-y-2">
+                {previewOrder ? (
+                  <div>
+                    <div className="text-sm text-[#7b3306]"><strong>Código:</strong> {previewOrder.orderCode}</div>
+                    <div className="text-sm text-[#7b3306]"><strong>Estado:</strong> {previewOrder.status}</div>
+                    <div className="text-sm text-[#7b3306]"><strong>Fecha:</strong> {format(previewOrder.createdAt ? new Date(previewOrder.createdAt) : new Date(), "PPP")}</div>
+                    <div className="text-sm text-[#7b3306]"><strong>Cliente:</strong> {previewOrder.customer?.name ?? previewOrder.user?.firstName ?? 'N/D'}</div>
+                    <div className="mt-2 text-sm">
+                      <strong>Items:</strong>
+                      <ul className="mt-1 space-y-1 text-xs text-[#7b3306]">
+                        {(previewOrder.items || []).map((it) => (
+                          <li key={it.id} className="flex justify-between">
+                            <span>{it.product?.name ?? 'Producto' } x{it.quantity}</span>
+                            <span>{new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(Number(it.unitPrice || 0) * Number(it.quantity || 0))}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="mt-3 text-sm font-semibold text-[#7b3306]">
+                      Total: {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format((previewOrder.items || []).reduce((s, it) => s + (Number(it.unitPrice || 0) * Number(it.quantity || 0)), 0))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm text-[#7b3306]">Detalles de la orden no disponibles.</div>
+                )}
+              </div>
+
+              <div className="col-span-1 md:col-span-2 h-[70vh]">
+                <iframe title="Factura backend" src={previewInvoiceUrl} className="w-full h-full" />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
         <div className="flex items-center gap-2">
           <button
@@ -495,116 +533,162 @@ export default function Calendar(): React.ReactElement {
 
       <div className="space-y-6">
         <div className="bg-white rounded-2xl border border-[#fef3c6] shadow p-4 relative">
-          <div className="grid grid-cols-7 text-sm font-semibold text-[#7b3306] mb-3">
-            {weekDays.map((label) => (
-              <div key={label} className="text-center">
-                {label}
+          <div className="grid md:grid-cols-3 gap-4">
+            <div className="md:col-span-2">
+              <div className="grid grid-cols-7 text-sm font-semibold text-[#7b3306] mb-3">
+                {weekDays.map((label) => (
+                  <div key={label} className="text-center">{label}</div>
+                ))}
               </div>
-            ))}
-          </div>
 
-          <div className="grid grid-cols-7 gap-2">
-            {days.map((dayItem) => {
-              const key = format(dayItem, "yyyy-MM-dd");
-              const isCurrentMonth = isSameMonth(dayItem, currentMonth);
-              const isSelected = isSameDay(dayItem, selectedDate);
-
-              return (
-                <button
-                  key={key}
-                  onClick={() => {
-                    setSelectedDate(dayItem);
-                    setReminderDate(key);
-                  }}
-                  className={`rounded-xl border p-2 text-left transition hover:shadow-sm ${
-                    isSelected
-                      ? "border-[#fe9a00] bg-[#fff7e6]"
-                      : "border-[#fef3c6] bg-[#fffbeb]"
-                  } ${isCurrentMonth ? "opacity-100" : "opacity-40"}`}
-                >
-                  <div className="text-sm font-semibold text-[#973c00]">
-                    {format(dayItem, "d")}
-                  </div>
-                  {renderBadges(key)}
-                </button>
-              );
-            })}
-          </div>
-
-          {loading && (
-            <div className="absolute inset-0 bg-white/70 backdrop-blur-sm rounded-2xl flex flex-col items-center justify-center gap-3">
-              <div className="h-10 w-10 rounded-full border-4 border-[#fef3c6] border-t-[#fe9a00] animate-spin" />
-              <div className="text-sm font-medium text-[#bb4d00]">Cargando calendario...</div>
-            </div>
-          )}
-        </div>
-        <div className="bg-white rounded-2xl border border-[#fef3c6] shadow p-4">
-          <h3 className="text-lg font-semibold text-[#973c00]">Detalle del día</h3>
-          <p className="text-sm text-[#bb4d00] mb-3">{format(selectedDate, "PPP")}</p>
-
-            {selectedItems.length === 0 ? (
-              <p className="text-sm text-[#7b3306]">Sin movimientos o eventos.</p>
-            ) : (
-            <div className="max-h-64 overflow-y-auto pr-1">
-              <ul className="space-y-2">
-                  {selectedItems.map((item) => {
-                  const style = detailStyles[item.type];
-                  const isInvoice = item.type === "ingreso" || (item.type === "recordatorio" && !!item.attachmentUrl);
-                  const timeHint = getTimeHint(item);
+              <div className="grid grid-cols-7 gap-2">
+                {days.map((d) => {
+                  const key = format(d, "yyyy-MM-dd");
+                  const dayItems = calendarItems.filter((i) => i.date === key);
+                  const dayOrders = dayItems.filter((i) => i.type === "ingreso" && i.order).map((i) => i.order as Order);
+                  const inMonth = isSameMonth(d, monthStart);
+                  const isSelected = isSameDay(d, selectedDate);
                   return (
-                    <li
-                      key={item.id}
-                      className={`group relative rounded-lg border p-2 ${style.card} ${isInvoice ? "cursor-pointer hover:shadow-sm" : ""}`}
-                      onClick={() => {
-                        if (isInvoice) setSelectedInvoice(item);
-                      }}
-                      role={isInvoice ? "button" : undefined}
-                      tabIndex={isInvoice ? 0 : undefined}
-                      onKeyDown={(e) => {
-                        if (!isInvoice) return;
-                        if (e.key === "Enter" || e.key === " ") setSelectedInvoice(item);
-                      }}
+                    <div
+                      key={key}
+                      onClick={() => setSelectedDate(d)}
+                      className={`p-2 rounded-lg border cursor-pointer ${isSelected ? "ring-2 ring-amber-300" : ""} ${inMonth ? "bg-white" : "bg-gray-50 text-gray-400"}`}
                     >
-                      {timeHint && (
-                        <span className="absolute top-2 right-2 rounded-full bg-white/90 border border-[#fef3c6] px-2 py-0.5 text-[10px] font-medium text-[#7b3306] shadow-sm opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-                          {timeHint}
-                        </span>
-                      )}
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="text-sm font-semibold text-[#973c00]">{item.title}</div>
-                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${style.badge}`}>
-                          {item.type.toUpperCase()}
-                        </span>
-                      </div>
-                      {item.meta && (
-                        <div className="text-xs text-[#7b3306] mt-1">{item.meta}</div>
-                      )}
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {isInvoice && (
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-white border border-[#fef3c6] text-[#7b3306] hover:bg-[#fff7e6]"
-                          >
-                            📄 Ver factura
-                          </button>
-                        )}
-                        {item.attachmentUrl && (
-                          <a
-                            href={item.attachmentUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-white border border-[#fef3c6] text-[#7b3306] hover:bg-[#fff7e6]"
-                          >
-                            📎 {item.attachmentFilename ? "Ver adjunto" : "Adjunto"}
-                          </a>
+                      <div className="flex justify-between items-start">
+                        <div className="text-sm font-medium">{format(d, "d")}</div>
+                        {dayItems.length > 0 && (
+                          <div className="flex items-center gap-1 overflow-hidden">
+                            {Array.from(new Set(dayItems.map((it) => it.type))).map((t) => (
+                              <span
+                                key={t}
+                                title={t}
+                                className={`${detailStyles[t as CalendarItemType].badge} w-3 h-3 rounded-full inline-block`}
+                              />
+                            ))}
+                          </div>
                         )}
                       </div>
-                    </li>
+                      <div className="mt-2 space-y-1 text-xs">
+                        {dayOrders.slice(0, 2).map((o) => (
+                          <div key={o.id} className="truncate text-[#973c00]">{o.orderCode}</div>
+                        ))}
+                        {dayOrders.length > 2 && <div className="text-xs text-gray-500">+{dayOrders.length - 2} más</div>}
+                      </div>
+                    </div>
                   );
                 })}
-              </ul>
+              </div>
             </div>
-          )}
+
+            <div className="md:col-span-1">
+              <div className="p-3 border rounded-lg h-[60vh] overflow-auto">
+                <h3 className="text-lg font-semibold text-[#973c00]">Detalles del día</h3>
+                <div className="text-sm text-gray-600 mb-3">{format(selectedDate, "PPP")}</div>
+                {ordersForDay.length === 0 ? (
+                  <div className="text-sm text-gray-600">No hay órdenes para esta fecha.</div>
+                ) : (
+                  <div className="space-y-3">
+                    {ordersForDay.map((order) => {
+                      const total = (order.items || []).reduce((s: number, it: any) => s + (Number(it.unitPrice) || 0) * (Number(it.quantity) || 0), 0);
+                      return (
+                        <div
+                          key={order.id}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => setSelectedOrderDetail(order)}
+                          className={`p-3 rounded-lg border cursor-pointer ${detailStyles.ingreso.card} hover:shadow-sm`}
+                        >
+                          <div className="flex justify-between items-center">
+                            <div className="text-sm font-medium text-[#973c00]">{order.orderCode}</div>
+                            <div className="text-sm font-semibold text-[#7b3306]">{new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", minimumFractionDigits: 0 }).format(total)}</div>
+                          </div>
+                          <div className="mt-2 flex items-center gap-2">
+                            {order.invoiceUrl ? (
+                              <span className="text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">📎 Factura</span>
+                            ) : (
+                              <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600">Sin factura</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Gastos del día (debajo de órdenes) */}
+                {(() => {
+                  const expensesForDay = calendarItems.filter((i) => i.type === "gasto" && i.date === selectedKey);
+                  if (expensesForDay.length === 0) return null;
+                  return (
+                    <div className="mt-4 md:mt-6">
+                      <h4 className="text-md font-semibold text-[#973c00]">Gastos del día</h4>
+                      <div className="mt-3 space-y-3">
+                        {expensesForDay.map((it) => {
+                          const src: any = it.source ?? {};
+                          const amount = src.amount ?? (it.meta ? String(it.meta) : "N/D");
+                          return (
+                            <div key={it.id} className={`p-3 rounded-lg border ${detailStyles.gasto.card}`}>
+                              <div className="flex justify-between items-center">
+                                <div className="text-sm font-medium text-[#7b3306]">{it.title ?? src.description ?? src.notes ?? 'Gasto'}</div>
+                                <div className="text-sm font-semibold text-rose-700">{amount}</div>
+                              </div>
+                              {it.attachmentUrl && (
+                                <div className="mt-2">
+                                  <a href={it.attachmentUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline">Ver adjunto</a>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Recordatorios del día (debajo de gastos) */}
+                {(() => {
+                  const remindersForDay = calendarItems.filter((i) => i.type === "recordatorio" && i.date === selectedKey);
+                  if (remindersForDay.length === 0) return null;
+                  return (
+                    <div className="mt-4 md:mt-6">
+                      <h4 className="text-md font-semibold text-[#973c00]">Recordatorios del día</h4>
+                      <div className="mt-3 space-y-3">
+                        {remindersForDay.map((it) => {
+                          const src: any = it.source ?? {};
+                          const remindAt = src.remindAt ?? src.date ?? undefined;
+                          let timeLabel = "";
+                          try {
+                            if (remindAt) timeLabel = format(parseISO(remindAt), "p");
+                          } catch {}
+                          return (
+                            <div
+                              key={it.id}
+                              role={it.attachmentUrl ? "button" : undefined}
+                              tabIndex={it.attachmentUrl ? 0 : undefined}
+                              onClick={() => it.attachmentUrl && window.open(it.attachmentUrl, "_blank")}
+                              onKeyPress={(e) => {
+                                if ((e.key === "Enter" || e.key === " ") && it.attachmentUrl) {
+                                  window.open(it.attachmentUrl, "_blank");
+                                }
+                              }}
+                              className={`p-3 rounded-lg border ${detailStyles.recordatorio.card} ${it.attachmentUrl ? "cursor-pointer hover:shadow-sm" : ""}`}
+                              aria-label={it.attachmentUrl ? `Abrir adjunto: ${it.attachmentFilename ?? it.title}` : undefined}
+                            >
+                              <div className="flex justify-between items-center">
+                                <div className="text-sm font-medium text-[#7b3306]">{it.title ?? src.title ?? 'Recordatorio'}</div>
+                                {timeLabel && <div className="text-sm text-gray-600">{timeLabel}</div>}
+                              </div>
+                              {it.meta && <div className="mt-2 text-sm text-gray-700">{it.meta}</div>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="bg-white rounded-2xl border border-[#fef3c6] shadow p-4">
@@ -645,10 +729,23 @@ export default function Calendar(): React.ReactElement {
             </div>
             <button
               type="submit"
-              className="w-full px-3 py-2 rounded-lg bg-[#fe9a00] text-white font-semibold hover:bg-[#e27100]"
+              disabled={reminderUploading}
+              className="w-full px-3 py-2 rounded-lg bg-[#fe9a00] text-white font-semibold hover:bg-[#e27100] disabled:opacity-60"
             >
-              Crear recordatorio
+              {reminderUploading ? "Subiendo..." : "Crear recordatorio"}
             </button>
+            <div className="flex items-center gap-3 mt-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={reminderAllDay} onChange={(e) => setReminderAllDay(e.target.checked)} />
+                Todo el día
+              </label>
+              <input
+                placeholder="Tipo (opcional)"
+                className="text-sm px-2 py-1 rounded border border-[#fef3c6] bg-[#fffbeb]"
+                value={reminderType}
+                onChange={(e) => setReminderType(e.target.value)}
+              />
+            </div>
             {(linkedIncomeId || linkedOrderId) && (
               <div className="text-xs text-[#7b3306]">
                 Vinculado a {linkedIncomeId ? `ingreso ${linkedIncomeId}` : ""}
@@ -670,82 +767,18 @@ export default function Calendar(): React.ReactElement {
         </div>
       </div>
 
-      {selectedInvoice && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-3 sm:p-4">
-          <div className="bg-white rounded-2xl shadow-lg w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between px-4 py-3 border-b">
-              <h3 className="text-lg font-semibold text-[#973c00]">Factura del día</h3>
-              <button
-                onClick={() => setSelectedInvoice(null)}
-                className="text-gray-500"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="p-4 space-y-3 overflow-y-auto">
-              <div className="text-sm text-[#7b3306]">
-                <strong>Fecha:</strong> {selectedInvoice.date}
-              </div>
-
-              <div className="rounded-lg border border-[#fef3c6] bg-[#fffbeb] p-3 space-y-2">
-                <div className="text-sm">
-                  <strong>Descripción:</strong>{" "}
-                  {selectedInvoice.source?.descripcion
-                    ?? selectedInvoice.source?.description
-                    ?? selectedInvoice.source?.supplier
-                    ?? selectedInvoice.title}
-                </div>
-                <div className="text-sm">
-                  <strong>Monto:</strong>{" "}
-                  {formatCurrency(
-                    selectedInvoice.source?.monto
-                      ?? selectedInvoice.source?.amount
-                      ?? selectedInvoice.source?.value
-                  )}
-                </div>
-                <div className="text-sm">
-                  <strong>ID:</strong> {selectedInvoice.source?.id ?? selectedInvoice.id}
-                </div>
-              </div>
-
-              {selectedInvoice.attachmentUrl && (
-                <div className="rounded-lg border border-[#fef3c6] bg-white overflow-hidden">
-                  <div className="px-3 py-2 text-sm font-semibold text-[#973c00] bg-[#fff7e6]">
-                    Previsualización de factura
-                  </div>
-                  <iframe
-                    title="Factura"
-                    src={selectedInvoice.attachmentUrl}
-                    className="w-full h-[45vh] sm:h-[55vh]"
-                  />
-                </div>
-              )}
-
-              <div className="flex justify-between items-center">
-                <button
-                  onClick={() => {
-                    setLinkedIncomeId(selectedInvoice.incomeId ?? null);
-                    setLinkedOrderId(selectedInvoice.orderId ?? null);
-                    setReminderTitle("Factura");
-                    setReminderDate(selectedInvoice.date);
-                    setSelectedInvoice(null);
-                  }}
-                  className="px-4 py-2 rounded-lg bg-[#fe9a00] text-white"
-                >
-                  Crear recordatorio con factura
-                </button>
-                <button
-                  onClick={() => setSelectedInvoice(null)}
-                  className="px-4 py-2 rounded-lg bg-gray-200"
-                >
-                  Cerrar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+        {/* Modal 'selectedInvoice' removed as part of day-detail cleanup */}
+        {selectedOrderDetail && (
+          <OrderDetailModal
+            order={selectedOrderDetail}
+            onClose={() => setSelectedOrderDetail(null)}
+            onUpdated={(updated) => {
+              setOrdersState((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+              setCalendarItems((prev) => prev.map((it) => (it.orderId === updated.id ? { ...it, source: updated, order: updated } : it)));
+              setSelectedOrderDetail(updated);
+            }}
+          />
+        )}
     </div>
   );
 }

@@ -1,8 +1,8 @@
-import React, { useRef, useState } from "react";
+import React, { useState } from "react";
 import { Order } from "../../types";
 import { pdf, Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 import { useAuth } from "../../context/AuthContext";
-import { deleteOrderInvoice, uploadOrderInvoice } from "../../services/clientOrders";
+import { uploadOrderInvoice } from "../../services/clientOrders";
 
 interface Props {
   order: Order | null;
@@ -16,9 +16,15 @@ interface ExtendedOrder extends Order {
 
 export default function OrderDetailModal({ order, onClose, onUpdated }: Props) {
   const { company: authCompany } = useAuth();
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [deletingInvoice, setDeletingInvoice] = useState(false);
+  const [uploadingGenerated, setUploadingGenerated] = useState(false);
+  const API_BASE = (process.env.REACT_APP_API_URL || "").replace(/\/$/, "");
+  const resolveUrl = (url?: string | null) => {
+    if (!url) return undefined;
+    if (/^https?:\/\//i.test(url)) return url;
+    if (!API_BASE) return url;
+    if (!url.startsWith("/")) return `${API_BASE}/uploads/${url}`;
+    return `${API_BASE}${url}`;
+  };
 
   if (!order) return null;
 
@@ -137,63 +143,7 @@ export default function OrderDetailModal({ order, onClose, onUpdated }: Props) {
     </Document>
   );
 
-  const handlePreviewPdf = async () => {
-    try {
-      const asPdf = pdf(<OrderPdfDocument />);
-      const blob = await asPdf.toBlob();
-      const url = URL.createObjectURL(blob);
-      window.open(url, "_blank");
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    } catch (err) {
-      console.error("Error generando PDF:", err);
-    }
-  };
-
-  const handleUploadInvoice = async (file: File) => {
-    if (!order) return;
-    setUploading(true);
-    try {
-      const updated = await uploadOrderInvoice(order.id, file, file.name);
-      onUpdated?.({ ...order, ...updated });
-    } catch (err) {
-      console.error("Error subiendo factura:", err);
-      alert("No se pudo adjuntar la factura.");
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-  };
-
-  const handleDeleteInvoice = async () => {
-    if (!order) return;
-    setDeletingInvoice(true);
-    try {
-      const updated = await deleteOrderInvoice(order.id);
-      onUpdated?.({ ...order, ...updated });
-    } catch (err) {
-      console.error("Error eliminando factura:", err);
-      alert("No se pudo eliminar la factura.");
-    } finally {
-      setDeletingInvoice(false);
-    }
-  };
-
-  const handleDownloadPdf = async () => {
-    try {
-      const asPdf = pdf(<OrderPdfDocument />);
-      const blob = await asPdf.toBlob();
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      const filename = `orden-${order.orderCode || order.id}.pdf`;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(link.href), 60_000);
-    } catch (err) {
-      console.error("Error descargando PDF:", err);
-    }
-  };
+  // Preview/download helpers removed (not used here).
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-[9999] transition-opacity duration-300">
@@ -251,68 +201,61 @@ export default function OrderDetailModal({ order, onClose, onUpdated }: Props) {
 
             <div className="text-right font-bold text-[#973c00]">Total: COP {total.toLocaleString("es-CO")}</div>
 
-            <div className="mt-4 space-y-2">
-              <div className="text-sm text-gray-700 flex items-center gap-2">
-                <strong>Factura:</strong>
-                {order.invoiceUrl ? (
-                  <span className="text-xs text-[#7b3306]">
-                    {order.invoiceFilename ?? "Adjunto"}
-                  </span>
-                ) : (
-                  <span>Sin adjunto</span>
-                )}
+              <div className="mt-4 space-y-2">
+                <div className="text-sm text-gray-700 flex items-center gap-2">
+                  <strong>Factura:</strong>
+                  {order.invoiceUrl ? (
+                    <span className="text-xs text-[#7b3306]">
+                      {order.invoiceFilename ?? "Factura generada"}
+                    </span>
+                  ) : (
+                    <span>Sin factura generada</span>
+                  )}
+                </div>
+                <div className="flex gap-2 mt-2">
+                  {order.invoiceUrl && (
+                    <a
+                      href={resolveUrl(order.invoiceUrl)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3 py-1.5 rounded text-sm font-bold bg-gradient-to-r from-[#f6c453] to-[#fe9a00] text-white shadow hover:from-[#f0b842] hover:to-[#e27b00]"
+                    >
+                      Ver factura
+                    </a>
+                  )}
+            
+                  {!order.invoiceUrl && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          setUploadingGenerated(true);
+                          const asPdf = pdf(<OrderPdfDocument />);
+                          const blob = await asPdf.toBlob();
+                          const filename = `factura-${order.orderCode || order.id}.pdf`;
+                          console.log("[OrderDetailModal] Subiendo factura generada", { filename, size: blob.size });
+                          const updated = await uploadOrderInvoice(order.id, blob, filename);
+                          onUpdated?.({ ...order, ...updated });
+                          alert("Factura generada y subida correctamente.");
+                        } catch (err: any) {
+                          console.error("Error subiendo factura generada:", err, err?.response?.data);
+                          alert("No se pudo subir la factura generada. " + (err?.response?.data?.message || ""));
+                        } finally {
+                          setUploadingGenerated(false);
+                        }
+                      }}
+                      disabled={uploadingGenerated}
+                      className="px-3 py-1.5 rounded text-sm font-semibold bg-green-600 text-white shadow disabled:opacity-60"
+                    >
+                      {uploadingGenerated ? "Subiendo..." : "Subir factura generada"}
+                    </button>
+                  )}
+                </div>
               </div>
-
-              <div className="flex flex-wrap gap-2">
-                {order.invoiceUrl && (
-                  <a
-                    href={order.invoiceUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="px-3 py-1.5 rounded text-sm font-semibold bg-gradient-to-r from-[#f6c453] to-[#fe9a00] text-white shadow hover:from-[#f0b842] hover:to-[#e27b00]"
-                  >
-                    Ver factura
-                  </a>
-                )}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="application/pdf,image/jpeg,image/png,image/webp"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleUploadInvoice(file);
-                  }}
-                />
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
-                  className="px-3 py-1.5 rounded text-sm font-semibold bg-gradient-to-r from-[#ffe08a] to-[#ffb900] text-[#7b3306] shadow hover:from-[#ffda70] hover:to-[#eaa200] disabled:opacity-60"
-                >
-                  {uploading ? "Subiendo..." : "Adjuntar factura"}
-                </button>
-                {order.invoiceUrl && (
-                  <button
-                    onClick={handleDeleteInvoice}
-                    disabled={deletingInvoice}
-                    className="px-3 py-1.5 bg-red-600 text-white rounded text-sm shadow hover:bg-red-700 disabled:opacity-60"
-                  >
-                    {deletingInvoice ? "Eliminando..." : "Eliminar factura"}
-                  </button>
-                )}
-              </div>
-            </div>
           </div>
         </div>
 
         <div className="flex justify-end gap-3 mt-6">
-          <button onClick={handlePreviewPdf} className="px-4 py-2 bg-blue-600 text-white rounded">
-            Previsualizar PDF
-          </button>
-          <button onClick={handleDownloadPdf} className="px-4 py-2 bg-indigo-600 text-white rounded">
-            Descargar PDF
-          </button>
-          <button onClick={onClose} className="text-sm text-gray-600 hover:underline">
+          <button onClick={onClose} className="px-4 py-2 bg-gray-200 text-gray-800 rounded">
             Cerrar
           </button>
         </div>

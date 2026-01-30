@@ -47,10 +47,30 @@ export const deleteOrder = async (id: string): Promise<void> => {
 export const uploadOrderInvoice = async (id: string, file: Blob, filename: string) => {
   const formData = new FormData();
   formData.append("invoice", file, filename);
-  const res = await api.post(`/client-orders/${id}/invoice`, formData, {
-    headers: { ...authHeader(), "Content-Type": "multipart/form-data" },
-  });
-  return res.data;
+  // Inspect FormData contents for debugging
+  try {
+    for (const entry of formData.entries()) {
+      const [key, value] = entry as [string, any];
+      if (value instanceof Blob) {
+        console.log(`[clientOrders] formData entry: ${key}`, { size: value.size, type: value.type, name: (value as any).name });
+      } else {
+        console.log(`[clientOrders] formData entry: ${key}`, value);
+      }
+    }
+  } catch (e) {
+    console.warn("Could not inspect FormData entries", e);
+  }
+
+  // Do not set Content-Type header manually; let the browser set the correct multipart boundary.
+  try {
+    const res = await api.post(`/client-orders/${id}/invoice`, formData, {
+      headers: { ...authHeader() },
+    });
+    return res.data;
+  } catch (err: any) {
+    console.error("[clientOrders] uploadOrderInvoice error:", err?.response?.data ?? err);
+    throw err;
+  }
 };
 
 export const deleteOrderInvoice = async (id: string) => {

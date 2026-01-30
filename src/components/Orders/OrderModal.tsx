@@ -59,6 +59,10 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
     return Number.isFinite(n) ? n : 0;
   };
 
+  const insufficient = selected
+    .map(i => ({ name: i.product.name, requested: i.quantity, available: i.product.stock ?? 0 }))
+    .filter(x => x.requested > x.available);
+
   const handleSubmit = async () => {
     if (!authCompany || !authCompany.id) {
       alert("No se encontró la empresa del usuario autenticado. Verifica tu sesión.");
@@ -67,6 +71,18 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
 
     if (selected.length === 0) {
       alert("Selecciona al menos un producto.");
+      return;
+    }
+
+    // Validar stock antes de enviar (backup)
+    const insufficientLocal: Array<{ name: string; requested: number; available: number }> = [];
+    selected.forEach(i => {
+      const avail = (i.product.stock ?? 0);
+      if (i.quantity > avail) insufficientLocal.push({ name: i.product.name, requested: i.quantity, available: avail });
+    });
+    if (insufficientLocal.length > 0) {
+      const msg = insufficientLocal.map(x => `${x.name}: solicitado ${x.requested}, disponible ${x.available}`).join("\n");
+      alert("Stock insuficiente:\n" + msg);
       return;
     }
 
@@ -258,6 +274,16 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
 
           <div className="bg-yellow-50 p-4 rounded-lg shadow-inner overflow-y-auto">
             <h3 className="font-semibold mb-4">Selección</h3>
+            {insufficient.length > 0 && (
+              <div className="mb-3 p-3 bg-red-50 border border-red-200 text-red-700 rounded">
+                <strong>Stock insuficiente:</strong>
+                <ul className="mt-2 text-sm">
+                  {insufficient.map((x) => (
+                    <li key={x.name}>{x.name}: solicitado {x.requested}, disponible {x.available}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {selected.length === 0 ? (
               <p className="text-gray-500">No has seleccionado productos.</p>
             ) : (
@@ -335,8 +361,8 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
           <div>
             <button
               onClick={handleSubmit}
-              disabled={loading || selected.length === 0}
-              className="bg-green-600 text-white px-4 py-2 rounded"
+              disabled={loading || selected.length === 0 || insufficient.length > 0}
+              className="bg-green-600 text-white px-4 py-2 rounded disabled:opacity-50"
             >
               {loading ? "Guardando..." : "Guardar orden"}
             </button>

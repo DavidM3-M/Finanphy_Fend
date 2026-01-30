@@ -11,7 +11,7 @@ console.log("📡 API baseURL =", BASE);
 
 const api = axios.create({
   baseURL: BASE,
-  headers: { "Content-Type": "application/json" },
+  // No default Content-Type: leave it to each request/axios to set appropriately
   timeout: 15000,
 });
 

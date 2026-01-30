@@ -357,14 +357,15 @@ export default function Orders() {
             const asPdf = pdf(<InvoicePdfDocument order={orderToInvoice} />);
             const blob = await asPdf.toBlob();
             const filename = `factura-${orderToInvoice.orderCode || id}.pdf`;
+            console.log("[Orders] Preparando subida de factura", { id, filename, size: blob.size, type: blob.type });
             const updated = await uploadOrderInvoice(id, blob, filename);
             setOrders((prev) =>
               prev.map((o) => (o.id === id ? { ...o, ...updated } : o))
             );
             setSelectedOrder((cur) => (cur && cur.id === id ? { ...cur, ...updated } : cur));
-          } catch (err) {
-            console.error("Error adjuntando factura:", err);
-            alert("La orden se marcó como enviada, pero no se pudo adjuntar la factura.");
+          } catch (err: any) {
+            console.error("Error adjuntando factura:", err, err?.response?.data);
+            alert("La orden se marcó como enviada, pero no se pudo adjuntar la factura. " + (err?.response?.data?.message || ""));
           }
         }
       }

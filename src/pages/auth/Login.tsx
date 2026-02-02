@@ -65,6 +65,12 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    try {
+      // Clear any previous auth error left by interceptor redirects
+      try {
+        sessionStorage.removeItem("authError");
+      } catch {}
+    } catch {}
 
     try {
       // login debe ser async y encargarse de persistir token/user en el contexto

@@ -40,7 +40,12 @@ export function clearAuthToken() {
 api.interceptors.response.use(
   (resp) => resp,
   (err) => {
-    if (err.response?.status === 401) {
+    // Ignore 401s coming from auth endpoints (login/register/forgot-password)
+    // so that login failures (wrong password) are handled by the caller.
+    const reqUrl: string = err?.config?.url ?? "";
+    const isAuthEndpoint = /\/login$|\/register$|forgot-password/i.test(reqUrl);
+
+    if (err.response?.status === 401 && !isAuthEndpoint) {
       console.warn("🔐 Token inválido o expirado");
 
       // Mostrar mensaje de sesión caducada de forma consistente
@@ -48,7 +53,7 @@ api.interceptors.response.use(
 
       // Persistir mensaje para que Login lo lea tras la redirección
       try {
-        sessionStorage.setItem("authError", msg);  
+        sessionStorage.setItem("authError", msg);
       } catch (e) {
         console.warn("No se pudo guardar authError en sessionStorage", e);
       }
@@ -61,6 +66,7 @@ api.interceptors.response.use(
       const encoded = encodeURIComponent(msg);
       window.location.href = `/auth/login?authError=${encoded}`;
     }
+
     return Promise.reject(err);
   }
 );

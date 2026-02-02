@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { createOrder } from "../../services/clientOrders";
+import { createOrder, uploadOrderInvoice } from "../../services/clientOrders";
+import { checkStock } from "../../services/products";
 import { getProducts } from "../../services/products";
 import { getCustomers } from "../../services/customers";
 import { Customer, Product } from "../../types";
 import { pdf, Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
+import { InvoicePdfDocument } from "../../components/Orders/InvoicePdf";
 import { useAuth } from "../../context/AuthContext";
 
 interface Props {
@@ -101,8 +103,39 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
         customerId: customerId || undefined,
       };
 
+      // Verificar stock en servidor antes de crear la orden
+      try {
+        const stockRes = await checkStock(items);
+        const insufficientSrv = stockRes.filter((r) => !r.sufficient);
+        if (insufficientSrv.length > 0) {
+          const msg = insufficientSrv
+            .map((x) => `${x.productId}: solicitado ${x.requested}, disponible ${x.available ?? "N/D"}`)
+            .join("\n");
+          alert("Stock insuficiente:\n" + msg);
+          setLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.warn("Error comprobando stock en servidor:", err);
+        // continuar con el flujo si la comprobación falla, ya hicimos validación local antes
+      }
+
       // Si tu createOrder usa Authorization header, se mantiene el uso del token en servicios
-      await createOrder(payload);
+      const created: any = await createOrder(payload);
+
+      // Intentar generar y subir factura automáticamente
+      try {
+        const asPdf = pdf(<InvoicePdfDocument order={created} />);
+        const blob = await asPdf.toBlob();
+        const filename = `factura-${created.orderCode || created.id}.pdf`;
+        console.log("[OrderModal] Subiendo factura generada", { filename, size: blob.size });
+        const uploaded = await uploadOrderInvoice(created.id, blob, filename);
+        console.log("[OrderModal] Factura subida", uploaded);
+      } catch (err: any) {
+        console.error("Error generando/subiendo factura automática:", err, err?.response?.data);
+        // no abortamos la creación si falla la factura; solo informamos
+        alert("Orden creada, pero no se pudo adjuntar la factura automáticamente. " + (err?.response?.data?.message || ""));
+      }
 
       onCreated();
       onClose();

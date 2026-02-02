@@ -36,8 +36,9 @@ export const confirmOrder = async (id: string): Promise<void> => {
   await api.post(`/client-orders/${id}/confirm`, null, { headers: { ...authHeader() } });
 };
 
-export const createOrder = async (payload: OrderPayload): Promise<void> => {
-  await api.post("/client-orders", payload, { headers: { ...authHeader() } });
+export const createOrder = async (payload: OrderPayload): Promise<Order> => {
+  const res = await api.post("/client-orders", payload, { headers: { ...authHeader() } });
+  return res.data;
 };
 
 export const deleteOrder = async (id: string): Promise<void> => {

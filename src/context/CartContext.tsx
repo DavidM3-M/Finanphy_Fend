@@ -1,5 +1,7 @@
 // src/context/CartContext.tsx
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { pdf } from "@react-pdf/renderer";
+import { InvoicePdfDocument } from "../components/Orders/InvoicePdf";
 import type { Product, OrderPayload } from "../types";
 import * as ordersService from "../services/clientOrders"; // ajusta path si necesario
 
@@ -26,7 +28,7 @@ type CartActions = {
   removeItem: (productId: string) => void;
   clear: () => void;
   toggleOpen: (v?: boolean) => void;
-  createOrder: (extras?: { description?: string }) => Promise<void>;
+  createOrder: (extras?: { description?: string }) => Promise<any>;
 };
 
 const KEY = "finanphy:cart:v1";
@@ -148,10 +150,23 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       if (extras?.description) (payload as any).description = extras.description;
 
       // llamamos a tu servicio existente
-      await ordersService.createOrder(payload);
+      const created: any = await ordersService.createOrder(payload);
+
+      // intentar generar y subir factura automáticamente (no bloqueante para el flujo)
+      try {
+        const asPdf = pdf(<InvoicePdfDocument order={created} />);
+        const blob = await asPdf.toBlob();
+        const filename = `factura-${created.orderCode || created.id}.pdf`;
+        console.log("[CartContext] Subiendo factura generada", { filename, size: blob.size });
+        await ordersService.uploadOrderInvoice(created.id, blob, filename);
+      } catch (err) {
+        console.warn("No se pudo generar/subir factura automática desde CartContext:", err);
+      }
 
       // limpia carrito en éxito
       setState({ items: [], open: false, adding: false, companyId: null });
+
+      return created;
     } catch (err) {
       setState((s) => ({ ...s, adding: false }));
       throw err;

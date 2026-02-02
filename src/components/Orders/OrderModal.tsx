@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { createOrder, uploadOrderInvoice } from "../../services/clientOrders";
+import { createOrder, uploadOrderInvoice, getOrderById } from "../../services/clientOrders";
 import { checkStock } from "../../services/products";
-import { getProducts } from "../../services/products";
+import { getProducts, fetchAllProducts } from "../../services/products";
 import { getCustomers } from "../../services/customers";
-import { Customer, Product } from "../../types";
+import { Customer, Product, Order } from "../../types";
 import { pdf, Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 import { InvoicePdfDocument } from "../../components/Orders/InvoicePdf";
+import api from "../../services/api";
+import { getCustomerById } from "../../services/customers";
 import { useAuth } from "../../context/AuthContext";
 
 interface Props {
@@ -28,7 +30,8 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
 
   useEffect(() => {
     if (isOpen) {
-      getProducts({ page: 1, limit: 100 }).then((res) =>
+      // load a quick page for initial UX
+      getProducts({ page: 1, limit: 100, companyId: authCompany?.id }).then((res) =>
         setProducts(Array.isArray(res?.data) ? res.data : [])
       );
       if (authCompany?.id) {
@@ -44,6 +47,34 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
       setCustomerId("");
     }
   }, [isOpen, authCompany?.id]);
+
+  // Debounced search: when searchTerm changes, try server search (paged accumulation)
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    let t: number | undefined;
+    const doSearch = async () => {
+      if (!searchTerm || searchTerm.trim() === "") return;
+      try {
+        // Attempt to fetch matching products across pages (respect server limit)
+        const maxPages = 20;
+        const acc = await fetchAllProducts(searchTerm.trim(), authCompany?.id, maxPages);
+        if (!cancelled) setProducts(acc ?? []);
+      } catch (err) {
+        console.warn("OrderModal search failed, falling back to first page", err);
+        if (!cancelled) {
+          const res = await getProducts({ page: 1, limit: 100, companyId: authCompany?.id });
+          if (!cancelled) setProducts(Array.isArray(res?.data) ? res.data : []);
+        }
+      }
+    };
+
+    t = window.setTimeout(doSearch, 300) as unknown as number;
+    return () => {
+      cancelled = true;
+      if (t) window.clearTimeout(t);
+    };
+  }, [searchTerm, isOpen, authCompany?.id]);
 
   const handleAdd = (product: Product) => {
     if (selected.find(i => i.product.id === product.id)) return;
@@ -97,11 +128,13 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
 
       const payload: any = {
         items,
-        description: description || undefined,
+        description: description?.trim() || undefined,
         // Forzar companyId desde el contexto de autenticación
         companyId: authCompany.id,
         customerId: customerId || undefined,
       };
+
+      console.log("[OrderModal] creating order payload:", payload);
 
       // Verificar stock en servidor antes de crear la orden
       try {
@@ -122,18 +155,48 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
 
       // Si tu createOrder usa Authorization header, se mantiene el uso del token en servicios
       const created: any = await createOrder(payload);
+      console.log("[OrderModal] createOrder response:", created);
 
-      // Intentar generar y subir factura automáticamente
+      // Intentar generar y subir factura automáticamente — usar la orden completa desde servidor
       try {
-        const asPdf = pdf(<InvoicePdfDocument order={created} />);
+        const res = await getOrderById(created.id);
+        const payload = (res as any).data as any;
+        let fullOrder = payload?.data ? (payload.data as Order) : (payload as Order);
+
+        // Normalizar company
+        try {
+          const companyId = (fullOrder as any).companyId ?? fullOrder.company?.id;
+          if ((!fullOrder.company || !(fullOrder.company as any).tradeName) && companyId) {
+            const c = await api.get(`/companies/${companyId}`);
+            fullOrder.company = c.data?.data ?? c.data;
+          } else if (fullOrder.company && (fullOrder.company as any).data) {
+            fullOrder.company = (fullOrder.company as any).data;
+          }
+        } catch (e) {
+          console.warn("No se pudo normalizar company en OrderModal:", e);
+        }
+
+        // Normalizar customer
+        try {
+          const customerId = (fullOrder as any).customerId ?? (fullOrder.customer as any)?.id;
+          if ((!fullOrder.customer || !(fullOrder.customer as any).name) && customerId) {
+            const cust = await getCustomerById(customerId);
+            fullOrder.customer = cust ?? (cust as any).data ?? fullOrder.customer;
+          } else if (fullOrder.customer && (fullOrder.customer as any).data) {
+            fullOrder.customer = (fullOrder.customer as any).data;
+          }
+        } catch (e) {
+          console.warn("No se pudo normalizar customer en OrderModal:", e);
+        }
+
+        const asPdf = pdf(<InvoicePdfDocument order={fullOrder} />);
         const blob = await asPdf.toBlob();
-        const filename = `factura-${created.orderCode || created.id}.pdf`;
+        const filename = `factura-${fullOrder.orderCode || fullOrder.id}.pdf`;
         console.log("[OrderModal] Subiendo factura generada", { filename, size: blob.size });
-        const uploaded = await uploadOrderInvoice(created.id, blob, filename);
+        const uploaded = await uploadOrderInvoice(fullOrder.id, blob, filename);
         console.log("[OrderModal] Factura subida", uploaded);
       } catch (err: any) {
         console.error("Error generando/subiendo factura automática:", err, err?.response?.data);
-        // no abortamos la creación si falla la factura; solo informamos
         alert("Orden creada, pero no se pudo adjuntar la factura automáticamente. " + (err?.response?.data?.message || ""));
       }
 
@@ -254,9 +317,11 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
               value={description}
               onChange={e => setDescription(e.target.value)}
               rows={2}
+              maxLength={255}
               className="w-full border rounded px-3 py-2"
               placeholder="Ej. Pedido urgente para cliente VIP"
             />
+            <div className="text-xs text-gray-500 mt-1">{description.length}/255</div>
           </div>
 
           <div className="mt-4">

@@ -1,14 +1,31 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { getProducts as fetchProducts, fetchAllProducts } from "../../services/products";
+import type { Product, PaginatedResponse } from "../../types";
+import { useAuth } from "../../context/AuthContext";
+import { setAuthToken } from "../../services/api";
 import { useNavigate } from "react-router-dom";
 import { Package, User, ClipboardList } from "lucide-react";
 
 export default function CreateOrderForm() {
   const [cliente, setCliente] = useState("");
   const [producto, setProducto] = useState("");
+  const [productSuggestions, setProductSuggestions] = useState<any[]>([]);
+  const [debugFetchedCount, setDebugFetchedCount] = useState<number | null>(null);
+  const [debugMatchedCount, setDebugMatchedCount] = useState<number | null>(null);
+  const [productLoading, setProductLoading] = useState<boolean>(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [productTimer, setProductTimer] = useState<number | null>(null as unknown as number | null);
   const [cantidad, setCantidad] = useState<number>(1);
   const [loading, setLoading] = useState(false);
   const [animate, setAnimate] = useState(false);
   const navigate = useNavigate();
+  const { company } = useAuth();
+
+  // Ensure axios instance has the token header (in some cases AuthContext init may be delayed)
+  useEffect(() => {
+    const t = localStorage.getItem("token");
+    if (t) setAuthToken(t);
+  }, []);
 
   // Campos de factura
   const [invoiceNumber, setInvoiceNumber] = useState("");
@@ -94,7 +111,7 @@ export default function CreateOrderForm() {
       };
 
       // Aquí iría la lógica de envío a la API
-      console.log("Orden creada:", payload);
+      
 
       // Simular respuesta y navegar
       navigate("/app/orders");
@@ -214,22 +231,95 @@ export default function CreateOrderForm() {
 
         {/* Producto, cantidad, precio */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
+          <div className="relative">
             <label className="block text-sm font-medium text-[#bb4d00] flex items-center gap-2">
               <Package className="w-4 h-4" />
               Producto
             </label>
-            <select
+            <input
+              type="text"
               value={producto}
-              onChange={(e) => setProducto(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setProducto(v);
+                setShowSuggestions(true);
+                // debounce server search
+                if (productTimer) window.clearTimeout(productTimer);
+                const t = window.setTimeout(async () => {
+                  if (!v || v.trim() === "") {
+                    setProductSuggestions([]);
+                    return;
+                  }
+                  setProductLoading(true);
+                  try {
+                    // 1) Try server-side search (pages with search param)
+                    const accServer = await fetchAllProducts(v, company?.id, 20);
+                    setDebugFetchedCount(accServer?.length ?? 0);
+                    let matched = accServer ?? [];
+
+                    // 2) If server returned nothing, fallback to download-all + client filter
+                    if (!matched || matched.length === 0) {
+                      const maxPages = 50; // safety cap
+                      const all = await fetchAllProducts(undefined, company?.id, maxPages);
+                      const term = v.toString().trim().toLowerCase();
+                      matched = (all ?? []).filter((p) => {
+                        const name = (p.name || "").toString().toLowerCase();
+                        const sku = (p.sku || "").toString().toLowerCase();
+                        return name.includes(term) || sku.includes(term);
+                      });
+                      setDebugFetchedCount((all ?? []).length);
+                    }
+
+                    const items = (matched ?? []).slice(0, 10);
+                    setDebugMatchedCount((matched ?? []).length ?? 0);
+
+                    setProductSuggestions(items as Product[]);
+                  } catch (err) {
+                    console.error("Error buscando productos:", err);
+                    setProductSuggestions([]);
+                    setDebugFetchedCount(null);
+                    setDebugMatchedCount(null);
+                  } finally {
+                    setProductLoading(false);
+                  }
+                }, 400) as unknown as number;
+                setProductTimer(t);
+              }}
               required
               className="mt-1 w-full px-4 py-2 border border-[#fef3c6] rounded-lg bg-[#fffbeb] focus:border-[#fe9a00] focus:ring-2 focus:ring-[#fee685] transition"
-            >
-              <option value="">Selecciona un producto</option>
-              <option value="Producto A">Producto A</option>
-              <option value="Producto B">Producto B</option>
-              <option value="Producto C">Producto C</option>
-            </select>
+              placeholder="Busca por nombre o SKU..."
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+              onFocus={() => { if (productSuggestions.length) setShowSuggestions(true); }}
+            />
+            {/* Debug counters */}
+            <div className="text-xs text-gray-500 mt-1">Resultados encontrados: {debugMatchedCount ?? "—"} — Productos descargados: {debugFetchedCount ?? "—"}</div>
+            {showSuggestions && (productSuggestions.length > 0 || productLoading) && (
+              <ul className="absolute z-20 left-0 right-0 bg-white border rounded shadow mt-1 max-h-56 overflow-auto">
+                {productLoading && (
+                  <li className="px-3 py-2 cursor-default text-sm text-gray-500 flex items-center gap-2">
+                    <svg className="animate-spin h-4 w-4 text-gray-400" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" strokeWidth="3" stroke="currentColor" strokeOpacity="0.25" fill="none"></circle><path d="M22 12a10 10 0 00-10-10" strokeWidth="3" stroke="currentColor" strokeLinecap="round" fill="none"></path></svg>
+                    Buscando…
+                  </li>
+                )}
+                {productSuggestions.map((p) => (
+                  <li
+                    key={p.id}
+                    className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                    onMouseDown={(ev) => {
+                      ev.preventDefault();
+                      // set selected product name and unit price
+                      setProducto(p.name);
+                      setUnitPrice(Number((p as any).price) || 0);
+                      setShowSuggestions(false);
+                      setProductSuggestions([]);
+                    }}
+                  >
+                    <div className="font-medium">{p.name}</div>
+                    <div className="text-xs text-gray-500">SKU: {p.sku} — ${Number((p as any).price).toFixed(2)}</div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           <div>

@@ -6,10 +6,12 @@ import {
   getAllOrders,
   deleteOrder,
   updateOrderStatus,
+  getOrderById,
   Order,
   uploadOrderInvoice,
   deleteOrderInvoice,
 } from "../../services/clientOrders";
+import api from "../../services/api";
 import OrderModal from "../../components/Orders/OrderModal";
 import OrderDetailModal from "../../components/Orders/OrderDetailModal";
 import { format, parseISO } from "date-fns";
@@ -236,17 +238,46 @@ export default function Orders() {
       setSelectedOrder((cur) => (cur && cur.id === id ? { ...cur, status: typedStatus } : cur));
 
       if (status === "enviado") {
-        const orderToInvoice = orders.find((o) => o.id === id);
-        if (orderToInvoice && !orderToInvoice.invoiceUrl) {
+        const orderListEntry = orders.find((o) => o.id === id);
+        if (orderListEntry && !orderListEntry.invoiceUrl) {
           try {
-            const asPdf = pdf(<InvoicePdfDocument order={orderToInvoice} />);
+            // Obtener la orden completa desde el servidor para asegurar company/customer/description
+            const fullRes = await getOrderById(id);
+            const payload = (fullRes as any).data as any;
+            let fullOrder = payload?.data ? (payload.data as Order) : (payload as Order);
+
+            // Normalizar company si viene en campos anidados
+            try {
+              const companyId = (fullOrder as any).companyId ?? fullOrder.company?.id;
+              if ((!fullOrder.company || !(fullOrder.company as any).tradeName) && companyId) {
+                const c = await api.get(`/companies/${companyId}`);
+                fullOrder.company = c.data?.data ?? c.data;
+              } else if (fullOrder.company && (fullOrder.company as any).data) {
+                fullOrder.company = (fullOrder.company as any).data;
+              }
+            } catch (e) {
+              console.warn("No se pudo normalizar company para factura:", e);
+            }
+
+            // Normalizar customer
+            try {
+              const customerId = (fullOrder as any).customerId ?? (fullOrder.customer as any)?.id;
+              if ((!fullOrder.customer || !(fullOrder.customer as any).name) && customerId) {
+                const cust = await (await import('../../services/customers')).getCustomerById(customerId);
+                fullOrder.customer = cust ?? (cust as any).data ?? fullOrder.customer;
+              } else if (fullOrder.customer && (fullOrder.customer as any).data) {
+                fullOrder.customer = (fullOrder.customer as any).data;
+              }
+            } catch (e) {
+              console.warn("No se pudo normalizar customer para factura:", e);
+            }
+
+            const asPdf = pdf(<InvoicePdfDocument order={fullOrder} />);
             const blob = await asPdf.toBlob();
-            const filename = `factura-${orderToInvoice.orderCode || id}.pdf`;
+            const filename = `factura-${fullOrder.orderCode || id}.pdf`;
             console.log("[Orders] Preparando subida de factura", { id, filename, size: blob.size, type: blob.type });
             const updated = await uploadOrderInvoice(id, blob, filename);
-            setOrders((prev) =>
-              prev.map((o) => (o.id === id ? { ...o, ...updated } : o))
-            );
+            setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, ...updated } : o)));
             setSelectedOrder((cur) => (cur && cur.id === id ? { ...cur, ...updated } : cur));
           } catch (err: any) {
             console.error("Error adjuntando factura:", err, err?.response?.data);

@@ -9,8 +9,25 @@ export interface ProductsQuery {
 }
 
 export const getProducts = async (params?: ProductsQuery): Promise<PaginatedResponse<Product>> => {
+  // Debug: log query params to help diagnose missing-results issues
   const res = await api.get<PaginatedResponse<Product>>("/products", { params });
   return res.data;
+};
+
+// Fetch all matching products by paging the /products endpoint (limit <= 100)
+export const fetchAllProducts = async (search?: string, companyId?: string, maxPages = 10) => {
+  const perPage = 100;
+  const acc: Product[] = [];
+  let page = 1;
+  while (page <= maxPages) {
+    const res = await getProducts({ page, limit: perPage, search, companyId });
+    const data = Array.isArray(res?.data) ? res.data : [];
+    acc.push(...data);
+    const totalPages = res?.meta?.totalPages ?? 1;
+    if (page >= totalPages) break;
+    page += 1;
+  }
+  return acc;
 };
 
 // DTO for checkStock request/response

@@ -1,8 +1,11 @@
 import React, { useState } from "react";
 import { Order } from "../../types";
-import { pdf, Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
+import { pdf } from "@react-pdf/renderer";
 import { useAuth } from "../../context/AuthContext";
-import { uploadOrderInvoice } from "../../services/clientOrders";
+import { uploadOrderInvoice, getOrderById, deleteOrderInvoice } from "../../services/clientOrders";
+import { InvoicePdfDocument } from "./InvoicePdf";
+import api from "../../services/api";
+import { getCustomerById } from "../../services/customers";
 
 interface Props {
   order: Order | null;
@@ -51,97 +54,9 @@ export default function OrderDetailModal({ order, onClose, onUpdated }: Props) {
     return sum + unit * qty;
   }, 0);
 
-  const styles = StyleSheet.create({
-    page: { padding: 20, fontSize: 11, fontFamily: "Helvetica" },
-    header: { flexDirection: "row", justifyContent: "space-between", marginBottom: 12 },
-    title: { fontSize: 16, fontWeight: "bold", color: "#973c00" },
-    section: { marginVertical: 6 },
-    tableHeader: { flexDirection: "row", borderBottomWidth: 1, paddingBottom: 6, marginTop: 6 },
-    th: { fontWeight: "bold" },
-    row: { flexDirection: "row", paddingVertical: 6, borderBottomWidth: 0.5, borderBottomColor: "#eee" },
-    desc: { width: "55%" },
-    qty: { width: "15%", textAlign: "right" },
-    price: { width: "30%", textAlign: "right" },
-    totals: { marginTop: 12, alignSelf: "flex-end", width: "40%" },
-    totalsRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 },
-    footer: { marginTop: 20, fontSize: 9, color: "#666" },
-  });
+  // PDF rendering is done via `InvoicePdfDocument`; local PDF styles/format helpers removed.
 
-  function formatCurrency(n: number) {
-    return `COP ${n.toLocaleString("es-CO", { minimumFractionDigits: 2 })}`;
-  }
-
-  const OrderPdfDocument = () => (
-    <Document>
-      <Page size="A4" style={styles.page}>
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.title}>Detalle de orden</Text>
-            <Text>Código: {order.orderCode}</Text>
-            <Text>Estado: {order.status}</Text>
-          </View>
-
-          <View style={{ alignItems: "flex-end" }}>
-            <Text>Fecha: {new Date(order.createdAt).toLocaleDateString()}</Text>
-            <Text>
-              Cliente: {order.customer?.name ?? (`${order.user?.firstName ?? ""} ${order.user?.lastName ?? ""}`.trim() || "N/D")}
-            </Text>
-            <Text>Empresa: {companyToShow.tradeName}</Text>
-            <Text>Email: {companyToShow.companyEmail ?? "N/D"}</Text>
-            <Text>Teléfono: {companyToShow.companyPhone ?? "N/D"}</Text>
-          </View>
-        </View>
-
-        {extendedOrder.description && (
-          <View style={styles.section}>
-            <Text style={{ fontWeight: "bold" }}>Descripción</Text>
-            <Text>{extendedOrder.description}</Text>
-          </View>
-        )}
-
-        <View style={styles.section}>
-          <Text style={{ fontWeight: "bold", marginBottom: 6 }}>Productos</Text>
-
-          <View style={styles.tableHeader}>
-            <Text style={[styles.th, styles.desc]}>Descripción</Text>
-            <Text style={[styles.th, styles.qty]}>Cant.</Text>
-            <Text style={[styles.th, styles.price]}>Subtotal</Text>
-          </View>
-
-          {order.items.map((item) => {
-            const unit = safeNumber(item.unitPrice);
-            const subtotal = unit * safeNumber(item.quantity);
-            return (
-              <View key={item.id} style={styles.row} wrap={false}>
-                <Text style={styles.desc}>{item.product?.name ?? "Producto desconocido"}</Text>
-                <Text style={styles.qty}>{safeNumber(item.quantity)}</Text>
-                <Text style={styles.price}>{formatCurrency(subtotal)}</Text>
-              </View>
-            );
-          })}
-        </View>
-
-        <View style={styles.totals}>
-          <View style={styles.totalsRow}>
-            <Text>Subtotal</Text>
-            <Text>{formatCurrency(total)}</Text>
-          </View>
-          <View style={[styles.totalsRow, { fontWeight: "bold" }]}>
-            <Text>Total</Text>
-            <Text>{formatCurrency(total)}</Text>
-          </View>
-        </View>
-
-        <View style={{ marginTop: 16 }}>
-          <Text style={{ fontSize: 10, color: "#444", marginBottom: 4 }}>Datos fiscales de la empresa:</Text>
-          <Text style={{ fontSize: 10, color: "#444" }}>
-            NIT: {companyToShow.taxId ?? "N/D"} — Dirección: {companyToShow.fiscalAddress ?? "N/D"}
-          </Text>
-          <Text style={{ fontSize: 9, color: "#666", marginTop: 10 }}>Generado por Finanphy</Text>
-        </View>
-      </Page>
-    </Document>
-  );
+  // `renderPdfDocument` removed — `InvoicePdfDocument` is used for PDF generation to keep a single implementation.
 
   // Preview/download helpers removed (not used here).
 
@@ -224,30 +139,120 @@ export default function OrderDetailModal({ order, onClose, onUpdated }: Props) {
                     </a>
                   )}
             
-                  {!order.invoiceUrl && (
+                  {!order.invoiceUrl ? (
                     <button
                       onClick={async () => {
-                        try {
-                          setUploadingGenerated(true);
-                          const asPdf = pdf(<OrderPdfDocument />);
-                          const blob = await asPdf.toBlob();
-                          const filename = `factura-${order.orderCode || order.id}.pdf`;
-                          console.log("[OrderDetailModal] Subiendo factura generada", { filename, size: blob.size });
-                          const updated = await uploadOrderInvoice(order.id, blob, filename);
-                          onUpdated?.({ ...order, ...updated });
-                          alert("Factura generada y subida correctamente.");
-                        } catch (err: any) {
-                          console.error("Error subiendo factura generada:", err, err?.response?.data);
-                          alert("No se pudo subir la factura generada. " + (err?.response?.data?.message || ""));
-                        } finally {
-                          setUploadingGenerated(false);
-                        }
+                          try {
+                            setUploadingGenerated(true);
+                            // Ensure company/customer normalization if needed
+                            const maybeOrder = { ...order } as Order;
+                            if (maybeOrder.company && (maybeOrder.company as any).data) {
+                              maybeOrder.company = (maybeOrder.company as any).data;
+                            }
+                            if (!maybeOrder.customer && (maybeOrder as any).customerId) {
+                              try {
+                                const cust = await getCustomerById((maybeOrder as any).customerId);
+                                maybeOrder.customer = cust;
+                              } catch (e) {
+                                // ignore
+                              }
+                            }
+
+                            const asPdf = pdf(<InvoicePdfDocument order={maybeOrder} />);
+                            const blob = await asPdf.toBlob();
+                            const filename = `factura-${maybeOrder.orderCode || maybeOrder.id}.pdf`;
+                            const updated = await uploadOrderInvoice(maybeOrder.id, blob, filename);
+                            onUpdated?.({ ...maybeOrder, ...updated });
+                            alert("Factura generada y subida correctamente.");
+                          } catch (err: any) {
+                            console.error("Error subiendo factura generada:", err?.response?.data ?? err);
+                            alert("No se pudo subir la factura generada. " + (err?.response?.data?.message || ""));
+                          } finally {
+                            setUploadingGenerated(false);
+                          }
                       }}
                       disabled={uploadingGenerated}
                       className="px-3 py-1.5 rounded text-sm font-semibold bg-green-600 text-white shadow disabled:opacity-60"
                     >
                       {uploadingGenerated ? "Subiendo..." : "Subir factura generada"}
                     </button>
+                  ) : (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={async () => {
+                          if (!window.confirm("¿Eliminar la factura? Esta acción no se puede deshacer.")) return;
+                          try {
+                            setUploadingGenerated(true);
+                            await deleteOrderInvoice(order.id);
+                            onUpdated?.({ ...order, invoiceUrl: null, invoiceFilename: undefined });
+                            alert("Factura eliminada.");
+                          } catch (err: any) {
+                            console.error("Error eliminando factura:", err?.response?.data ?? err);
+                            alert("No se pudo eliminar la factura. " + (err?.response?.data?.message || ""));
+                          } finally {
+                            setUploadingGenerated(false);
+                          }
+                        }}
+                        disabled={uploadingGenerated}
+                        className="px-3 py-1.5 rounded text-sm font-semibold bg-red-600 text-white shadow disabled:opacity-60"
+                      >
+                        {uploadingGenerated ? "Procesando..." : "Eliminar factura"}
+                      </button>
+
+                      <button
+                        onClick={async () => {
+                          try {
+                            setUploadingGenerated(true);
+                            // Fetch full order to ensure company/customer data present
+                            const res = await getOrderById(order.id);
+                            const payload = res.data as any;
+                            const fullOrder = (payload && payload.data) ? (payload.data as Order) : (payload as Order);
+
+                            // Normalize company response shape
+                            try {
+                              const companyId = (fullOrder as any).companyId ?? fullOrder.company?.id;
+                              if ((!fullOrder.company || !(fullOrder.company as any).tradeName) && companyId) {
+                                const cRes = await api.get(`/companies/${companyId}`);
+                                fullOrder.company = cRes.data?.data ?? cRes.data;
+                              } else if (fullOrder.company && (fullOrder.company as any).data) {
+                                fullOrder.company = (fullOrder.company as any).data;
+                              }
+                            } catch (e) {
+                              console.warn("No se pudo obtener company adicional:", e);
+                            }
+
+                            // Normalize customer
+                            try {
+                              const customerId = (fullOrder as any).customerId ?? (fullOrder.customer as any)?.id;
+                              if ((!fullOrder.customer || !(fullOrder.customer as any).name) && customerId) {
+                                const cust = await getCustomerById(customerId);
+                                fullOrder.customer = cust ?? (cust as any).data ?? fullOrder.customer;
+                              } else if (fullOrder.customer && (fullOrder.customer as any).data) {
+                                fullOrder.customer = (fullOrder.customer as any).data;
+                              }
+                            } catch (e) {
+                              console.warn("No se pudo obtener customer adicional:", e);
+                            }
+
+                            const asPdf = pdf(<InvoicePdfDocument order={fullOrder} />);
+                            const blob = await asPdf.toBlob();
+                            const filename = `factura-${fullOrder.orderCode || fullOrder.id}.pdf`;
+                            const updated = await uploadOrderInvoice(fullOrder.id, blob, filename);
+                            onUpdated?.({ ...fullOrder, ...updated });
+                            alert("Factura regenerada y reemplazada correctamente.");
+                          } catch (err: any) {
+                            console.error("Error regenerando factura:", err?.response?.data ?? err);
+                            alert("No se pudo regenerar la factura. " + (err?.response?.data?.message || ""));
+                          } finally {
+                            setUploadingGenerated(false);
+                          }
+                        }}
+                        disabled={uploadingGenerated}
+                        className="px-3 py-1.5 rounded text-sm font-semibold bg-amber-600 text-white shadow disabled:opacity-60"
+                      >
+                        {uploadingGenerated ? "Procesando..." : "Regenerar"}
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>

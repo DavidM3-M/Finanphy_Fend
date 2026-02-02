@@ -482,12 +482,17 @@ const ProductsView: React.FC = () => {
       const token = localStorage.getItem("token");
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
+      // send request
       const res = await fetch(fullUrl, { method, body: fd, headers });
       console.log("submit response", method, fullUrl, res.status, res.statusText);
 
       const body = await parseResponseSafely(res);
       if (!res.ok) {
-        console.error("submit failed body:", body);
+        try {
+          console.error("submit failed body (stringified):", JSON.stringify(body));
+        } catch (e) {
+          console.error("submit failed body (raw):", body);
+        }
         throw new Error(`Request failed ${res.status}`);
       }
       return body;
@@ -564,6 +569,18 @@ const ProductsView: React.FC = () => {
   const submitWithFd = async (fd: FormData | null) => {
     if (!fd) return;
     try {
+      // Debug: log FormData contents to help diagnose 400 responses
+      try {
+        const entries: Record<string, any> = {};
+        for (const [k, v] of (fd as FormData).entries()) {
+          // if File, print name and size
+          if (v instanceof File) entries[k] = { fileName: v.name, size: v.size, type: v.type };
+          else entries[k] = v;
+        }
+        console.debug("Submitting product FormData:", entries);
+      } catch (e) {
+        console.debug("Could not enumerate FormData entries", e);
+      }
       if (isEditing && selectedId) {
         const path = `/products/${selectedId}`;
         const body = await sendFormDataToApi(fd, "PUT", path);

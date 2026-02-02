@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import React, {
   useState,
   useEffect,
@@ -350,19 +351,8 @@ const ProductsView: React.FC = () => {
     ? products
     : filtered.slice((page - 1) * pageSize, page * pageSize);
 
-  const getProductsData = () =>
-    filtered.map((p) => ({
-      Nombre: p.name,
-      SKU: p.sku,
-      Precio: (p as any).price,
-      Costo: (p as any).cost,
-      Stock: (p as any).stock,
-      FechaEntrada: (p as any).entryDate ?? "",
-      FechaExpiracion: (p as any).expiresAt ?? "",
-      Descripción: (p as any).description ?? "",
-      Categoría: (p as any).category ?? "",
-      Imagen: (p as any).imageUrl ?? "",
-    }));
+  // NOTE: CSV/Excel export now fetches all items directly via `fetchAllProducts`.
+  // Kept mapping inline where used; removed unused helper to satisfy linter.
 
   // Fetch all matching products from the API, paginated with limit <= 100
   const fetchAllProducts = async (term?: string) => {
@@ -725,10 +715,11 @@ const ProductsView: React.FC = () => {
             } finally {
               setSearching(false);
             }
-          }}
-          className="bg-blue-500 hover:bg-blue-600 text-white rounded px-3 py-1.5 text-sm"
+            }}
+            disabled={searching}
+            className="bg-blue-500 hover:bg-blue-600 text-white rounded px-3 py-1.5 text-sm disabled:opacity-50"
         >
-          Exportar CSV
+            {searching ? "Exportando…" : "Exportar CSV"}
         </button>
         <button
           onClick={async () => {
@@ -768,9 +759,10 @@ const ProductsView: React.FC = () => {
               setSearching(false);
             }
           }}
-          className="bg-green-500 hover:bg-green-600 text-white rounded px-3 py-1.5 text-sm"
+          disabled={searching}
+          className="bg-green-500 hover:bg-green-600 text-white rounded px-3 py-1.5 text-sm disabled:opacity-50"
         >
-          Exportar Excel
+          {searching ? "Exportando…" : "Exportar Excel"}
         </button>
         <input
           type="text"

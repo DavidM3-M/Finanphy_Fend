@@ -14,9 +14,10 @@ const invoiceStyles = StyleSheet.create({
   tableHeader: { flexDirection: "row", borderBottomWidth: 1, paddingBottom: 6, marginTop: 6 },
   th: { fontWeight: "bold" },
   row: { flexDirection: "row", paddingVertical: 6, borderBottomWidth: 0.5, borderBottomColor: "#eee" },
-  desc: { width: "55%" },
+  desc: { width: "45%" },
   qty: { width: "15%", textAlign: "right" },
-  price: { width: "30%", textAlign: "right" },
+  unit: { width: "20%", textAlign: "right" },
+  price: { width: "20%", textAlign: "right" },
   totals: { marginTop: 12, alignSelf: "flex-end", width: "40%" },
   totalsRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 },
 });
@@ -97,6 +98,7 @@ export function InvoicePdfDocument({ order }: { order: Order }) {
           <View style={invoiceStyles.tableHeader}>
             <Text style={[invoiceStyles.th, invoiceStyles.desc]}>Descripción</Text>
             <Text style={[invoiceStyles.th, invoiceStyles.qty]}>Cant.</Text>
+            <Text style={[invoiceStyles.th, invoiceStyles.unit]}>V. unitario</Text>
             <Text style={[invoiceStyles.th, invoiceStyles.price]}>Subtotal</Text>
           </View>
 
@@ -107,6 +109,7 @@ export function InvoicePdfDocument({ order }: { order: Order }) {
               <View key={item.id} style={invoiceStyles.row} wrap={false}>
                 <Text style={invoiceStyles.desc}>{item.product?.name ?? "Producto"}</Text>
                 <Text style={invoiceStyles.qty}>{safeNumber(item.quantity)}</Text>
+                <Text style={invoiceStyles.unit}>{formatCurrency(unit)}</Text>
                 <Text style={invoiceStyles.price}>{formatCurrency(subtotal)}</Text>
               </View>
             );

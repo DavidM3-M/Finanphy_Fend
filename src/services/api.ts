@@ -43,12 +43,8 @@ api.interceptors.response.use(
     if (err.response?.status === 401) {
       console.warn("🔐 Token inválido o expirado");
 
-      // Extraer mensaje del backend si existe
-      const msg =
-        err?.response?.data?.message ??
-        err?.response?.data?.error ??
-        err?.response?.data?.detail ??
-        "Sesión expirada. Por favor inicia sesión nuevamente";
+      // Mostrar mensaje de sesión caducada de forma consistente
+      const msg = "Sesión caducada";
 
       // Persistir mensaje para que Login lo lea tras la redirección
       try {

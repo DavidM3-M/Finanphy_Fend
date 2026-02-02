@@ -16,6 +16,8 @@ export interface Product {
   price: number;
   cost: number;
   stock: number;
+  entryDate?: string;
+  expiresAt?: string;
   description?: string;
   category?: string;
   imageUrl?: string;
@@ -27,7 +29,7 @@ interface ProductsContextData {
   error: string | null;
   companyId: string;
   meta: PaginatedMeta | null;
-  loadProducts: (params?: { page?: number; limit?: number; search?: string }) => Promise<void>;
+  loadProducts: (params?: { page?: number; limit?: number; search?: string; companyId?: string }) => Promise<void>;
   addProduct: (data: Omit<Product, "id">) => Promise<void>;
   editProduct: (id: Product["id"], data: Omit<Product, "id">) => Promise<void>;
   removeProduct: (id: Product["id"]) => Promise<void>;
@@ -51,19 +53,19 @@ export const ProductsProvider: React.FC<ProductsProviderProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [meta, setMeta] = useState<PaginatedMeta | null>(null);
 
-  const loadProducts = useCallback(async (params?: { page?: number; limit?: number; search?: string }) => {
+  const loadProducts = useCallback(async (params?: { page?: number; limit?: number; search?: string; companyId?: string }) => {
     setLoading(true);
     setError(null);
     try {
       const page = params?.page ?? 1;
       const limit = params?.limit ?? 20;
       const search = params?.search?.trim() || undefined;
-      const endpoint = publicMode
-        ? `/public/products/company/${companyId}` 
-        : `/products`;
-      const res = await api.get<PaginatedResponse<Product>>(endpoint, {
-        params: { page, limit, ...(search ? { search } : {}) },
-      });
+      const endpoint = publicMode ? `/public/products/company/${companyId}` : `/products`;
+      const reqParams: Record<string, any> = { page, limit };
+      if (search) reqParams.search = search;
+      // allow caller to override or scope by company
+      if (params?.companyId) reqParams.companyId = params.companyId;
+      const res = await api.get<PaginatedResponse<Product>>(endpoint, { params: reqParams });
       setProducts(res.data?.data ?? []);
       setMeta(res.data?.meta ?? null);
     } catch (err: any) {

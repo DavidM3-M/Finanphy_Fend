@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { createOrder, uploadOrderInvoice } from "../../services/clientOrders";
+import { checkStock } from "../../services/products";
 import { getProducts } from "../../services/products";
 import { getCustomers } from "../../services/customers";
 import { Customer, Product } from "../../types";
@@ -101,6 +102,23 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
         companyId: authCompany.id,
         customerId: customerId || undefined,
       };
+
+      // Verificar stock en servidor antes de crear la orden
+      try {
+        const stockRes = await checkStock(items);
+        const insufficientSrv = stockRes.filter((r) => !r.sufficient);
+        if (insufficientSrv.length > 0) {
+          const msg = insufficientSrv
+            .map((x) => `${x.productId}: solicitado ${x.requested}, disponible ${x.available ?? "N/D"}`)
+            .join("\n");
+          alert("Stock insuficiente:\n" + msg);
+          setLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.warn("Error comprobando stock en servidor:", err);
+        // continuar con el flujo si la comprobación falla, ya hicimos validación local antes
+      }
 
       // Si tu createOrder usa Authorization header, se mantiene el uso del token en servicios
       const created: any = await createOrder(payload);

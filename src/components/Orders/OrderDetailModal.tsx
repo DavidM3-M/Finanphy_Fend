@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Order } from "../../types";
-import { pdf, Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
+import { pdf } from "@react-pdf/renderer";
 import { useAuth } from "../../context/AuthContext";
 import { uploadOrderInvoice, getOrderById, deleteOrderInvoice } from "../../services/clientOrders";
 import { InvoicePdfDocument } from "./InvoicePdf";
@@ -54,25 +54,7 @@ export default function OrderDetailModal({ order, onClose, onUpdated }: Props) {
     return sum + unit * qty;
   }, 0);
 
-  const styles = StyleSheet.create({
-    page: { padding: 20, fontSize: 11, fontFamily: "Helvetica" },
-    header: { flexDirection: "row", justifyContent: "space-between", marginBottom: 12 },
-    title: { fontSize: 16, fontWeight: "bold", color: "#973c00" },
-    section: { marginVertical: 6 },
-    tableHeader: { flexDirection: "row", borderBottomWidth: 1, paddingBottom: 6, marginTop: 6 },
-    th: { fontWeight: "bold" },
-    row: { flexDirection: "row", paddingVertical: 6, borderBottomWidth: 0.5, borderBottomColor: "#eee" },
-    desc: { width: "55%" },
-    qty: { width: "15%", textAlign: "right" },
-    price: { width: "30%", textAlign: "right" },
-    totals: { marginTop: 12, alignSelf: "flex-end", width: "40%" },
-    totalsRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 },
-    footer: { marginTop: 20, fontSize: 9, color: "#666" },
-  });
-
-  function formatCurrency(n: number) {
-    return `COP ${n.toLocaleString("es-CO", { minimumFractionDigits: 2 })}`;
-  }
+  // PDF rendering is done via `InvoicePdfDocument`; local PDF styles/format helpers removed.
 
   // `renderPdfDocument` removed — `InvoicePdfDocument` is used for PDF generation to keep a single implementation.
 

@@ -3,7 +3,7 @@ import { createOrder, uploadOrderInvoice, getOrderById, confirmOrder, getAllOrde
 import { checkStock, getProducts, fetchAllProducts } from "../../services/products";
 import { getCustomers, getCustomerById } from "../../services/customers";
 import { Customer, Product, Order } from "../../types";
-import { pdf, Document, Page, Text } from "@react-pdf/renderer";
+import { pdf } from "@react-pdf/renderer";
 import { InvoicePdfDocument } from "../../components/Orders/InvoicePdf";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../ui/ToastProvider";
@@ -58,7 +58,7 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated, orde
         setCustomerDetails(null);
       }
     }
-  }, [isOpen, authCompany?.id]);
+  }, [isOpen, authCompany?.id, orderToEdit]);
 
   useEffect(() => {
     let cancelled = false;
@@ -292,13 +292,6 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated, orde
         if (!fullOrder) {
           console.warn("No se obtuvo la orden completa para generar factura, se omite la subida de factura.");
         } else {
-          let pdfOrder: any = null;
-          try {
-            pdfOrder = JSON.parse(JSON.stringify(fullOrder));
-          } catch (e) {
-            pdfOrder = fullOrder as any;
-          }
-
           try {
             // Ensure company object is populated for the PDF
             try {

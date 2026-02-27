@@ -1,24 +1,24 @@
 import React, { useEffect, useState } from "react";
-import { createOrder, uploadOrderInvoice, getOrderById } from "../../services/clientOrders";
-import { checkStock } from "../../services/products";
-import { getProducts, fetchAllProducts } from "../../services/products";
-import { getCustomers } from "../../services/customers";
+import { createOrder, uploadOrderInvoice, getOrderById, confirmOrder, getAllOrders, updateOrderStatus, updateOrder } from "../../services/clientOrders";
+import { checkStock, getProducts, fetchAllProducts } from "../../services/products";
+import { getCustomers, getCustomerById } from "../../services/customers";
 import { Customer, Product, Order } from "../../types";
-import { pdf, Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
+import { pdf, Document, Page, Text } from "@react-pdf/renderer";
 import { InvoicePdfDocument } from "../../components/Orders/InvoicePdf";
-import api from "../../services/api";
-import { getCustomerById } from "../../services/customers";
 import { useAuth } from "../../context/AuthContext";
+import { useToast } from "../ui/ToastProvider";
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   companyId?: string; // opcional, ya no se usará como fuente de verdad
-  onCreated: () => void;
+  onCreated?: () => void;
+  orderToEdit?: Order | null;
+  onUpdated?: (updated: Order) => void;
 }
-
-export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Props) {
+export default function OrderModal({ isOpen, onClose, companyId, onCreated, orderToEdit, onUpdated }: Props) {
   const { company: authCompany } = useAuth();
+  const { push } = useToast();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [selected, setSelected] = useState<{ product: Product; quantity: number }[]>([]);
@@ -27,28 +27,87 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
   const [loading, setLoading] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerId, setCustomerId] = useState("");
+  const [customerDetails, setCustomerDetails] = useState<Customer | null>(null);
+  const [payAmount, setPayAmount] = useState<number | undefined>(undefined);
+  const [payMethod, setPayMethod] = useState<string>("");
+  const [markAsSent, setMarkAsSent] = useState<boolean>(false);
+  const [paymentMethods, setPaymentMethods] = useState<string[]>([]);
+  const [customPayMethod, setCustomPayMethod] = useState<string>("");
 
   useEffect(() => {
     if (isOpen) {
       // load a quick page for initial UX
       getProducts({ page: 1, limit: 100, companyId: authCompany?.id }).then((res) =>
-        setProducts(Array.isArray(res?.data) ? res.data : [])
-      );
+        setProducts(Array.isArray(res?.data) ? res.data : []),
+      ).catch(() => setProducts([]));
       if (authCompany?.id) {
-        getCustomers(authCompany.id).then((data) =>
-          setCustomers(Array.isArray(data) ? data : [])
-        );
+        getCustomers(authCompany.id).then((data) => setCustomers(Array.isArray(data) ? data : [])).catch(() => setCustomers([]));
       } else {
         setCustomers([]);
       }
-      setSelected([]);
-      setSearchTerm("");
-      setDescription("");
-      setCustomerId("");
+      if (orderToEdit) {
+        // populate fields from orderToEdit
+        setSelected(Array.isArray(orderToEdit.items) ? orderToEdit.items.map((it: any) => ({ product: it.product, quantity: it.quantity })) : []);
+        setDescription(orderToEdit.description ?? "");
+        setCustomerId(orderToEdit.customer?.id ?? (orderToEdit as any).customerId ?? "");
+        setCustomerDetails(orderToEdit.customer ?? null);
+      } else {
+        setSelected([]);
+        setDescription("");
+        setCustomerId("");
+        setCustomerDetails(null);
+      }
     }
   }, [isOpen, authCompany?.id]);
 
-  // Debounced search: when searchTerm changes, try server search (paged accumulation)
+  useEffect(() => {
+    let cancelled = false;
+    const defaults = ["Efectivo", "Transferencia", "Tarjeta", "Otro"];
+    const tryFetch = async () => {
+      try {
+        const candidates = ["/payment-methods", "/api/payment-methods", "/settings/payment-methods"];
+        for (const url of candidates) {
+          try {
+            const res = await fetch(url);
+            if (!res.ok) continue;
+            const data = await res.json();
+            if (Array.isArray(data) && data.length > 0) {
+              if (!cancelled) setPaymentMethods(Array.from(new Set(data.map(String))));
+              return;
+            }
+          } catch (e) {
+            // ignore and try next
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+      if (!cancelled) setPaymentMethods(Array.from(new Set(defaults)));
+    };
+    tryFetch();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      if (!customerId) {
+        setCustomerDetails(null);
+        return;
+      }
+      try {
+        const c = await getCustomerById(customerId);
+        if (!cancelled) setCustomerDetails((c as any)?.data ?? c ?? null);
+      } catch (e) {
+        if (!cancelled) setCustomerDetails(null);
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [customerId]);
+
   useEffect(() => {
     if (!isOpen) return;
     let cancelled = false;
@@ -56,7 +115,6 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
     const doSearch = async () => {
       if (!searchTerm || searchTerm.trim() === "") return;
       try {
-        // Attempt to fetch matching products across pages (respect server limit)
         const maxPages = 20;
         const acc = await fetchAllProducts(searchTerm.trim(), authCompany?.id, maxPages);
         if (!cancelled) setProducts(acc ?? []);
@@ -98,16 +156,15 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
 
   const handleSubmit = async () => {
     if (!authCompany || !authCompany.id) {
-      alert("No se encontró la empresa del usuario autenticado. Verifica tu sesión.");
+      push("No se encontró la empresa del usuario autenticado. Verifica tu sesión.", { type: 'error' });
       return;
     }
 
     if (selected.length === 0) {
-      alert("Selecciona al menos un producto.");
+      push("Selecciona al menos un producto.", { type: 'warning' });
       return;
     }
 
-    // Validar stock antes de enviar (backup)
     const insufficientLocal: Array<{ name: string; requested: number; available: number }> = [];
     selected.forEach(i => {
       const avail = (i.product.stock ?? 0);
@@ -115,92 +172,236 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
     });
     if (insufficientLocal.length > 0) {
       const msg = insufficientLocal.map(x => `${x.name}: solicitado ${x.requested}, disponible ${x.available}`).join("\n");
-      alert("Stock insuficiente:\n" + msg);
+      push("Stock insuficiente: " + msg, { type: 'error', ttl: 8000 });
       return;
     }
 
     setLoading(true);
     try {
-      const items = selected.map(i => ({
-        productId: i.product.id,
-        quantity: i.quantity,
-      }));
+      const items = selected.map(i => ({ productId: i.product.id, quantity: i.quantity }));
 
+      const chosenPaymentMethod = payMethod === 'Otro' ? (customPayMethod || undefined) : (payMethod || undefined);
       const payload: any = {
         items,
         description: description?.trim() || undefined,
-        // Forzar companyId desde el contexto de autenticación
         companyId: authCompany.id,
         customerId: customerId || undefined,
+        paymentMethod: chosenPaymentMethod,
       };
 
-      console.log("[OrderModal] creating order payload:", payload);
-
-      // Verificar stock en servidor antes de crear la orden
       try {
         const stockRes = await checkStock(items);
         const insufficientSrv = stockRes.filter((r) => !r.sufficient);
-        if (insufficientSrv.length > 0) {
+          if (insufficientSrv.length > 0) {
           const msg = insufficientSrv
             .map((x) => `${x.productId}: solicitado ${x.requested}, disponible ${x.available ?? "N/D"}`)
-            .join("\n");
-          alert("Stock insuficiente:\n" + msg);
+            .join("; ");
+          push("Stock insuficiente: " + msg, { type: 'error', ttl: 8000 });
           setLoading(false);
           return;
         }
       } catch (err) {
         console.warn("Error comprobando stock en servidor:", err);
-        // continuar con el flujo si la comprobación falla, ya hicimos validación local antes
       }
 
-      // Si tu createOrder usa Authorization header, se mantiene el uso del token en servicios
-      const created: any = await createOrder(payload);
-      console.log("[OrderModal] createOrder response:", created);
+      let created: any = null;
+      let createdId: string | null = null;
+      if (orderToEdit && (orderToEdit as any).id) {
+        // update existing order
+        try {
+          const updated = await updateOrder(orderToEdit.id, payload);
+          created = updated;
+          createdId = updated?.id ?? updated?.data?.id ?? null;
+          console.log('[OrderModal] updateOrder returned:', updated);
+        } catch (e) {
+          console.error('Error updating order:', e);
+          throw e;
+        }
+      } else {
+        const cRes: any = await createOrder(payload);
+        created = cRes;
+        console.log('[OrderModal] createOrder returned:', created);
+        createdId = created?.id ?? created?.data?.id ?? (created as any)?.orderId ?? null;
+      }
+      // Fallback: if API didn't return an id, try to resolve by orderCode
+      if (!createdId && (created?.orderCode || created?.data?.orderCode)) {
+        const code = created?.orderCode ?? created?.data?.orderCode;
+        try {
+          const searchRes: any = await getAllOrders({ search: code, companyId: authCompany?.id, limit: 10 });
+          const payloadAny = (searchRes as any).data as any;
+          const list = payloadAny?.data ?? payloadAny ?? searchRes;
+          let found = null;
+          if (Array.isArray(list)) found = list.find((o: any) => o.orderCode === code);
+          else if (Array.isArray(list?.data)) found = list.data.find((o: any) => o.orderCode === code);
+          if (found) createdId = found.id ?? found._id ?? found.orderId ?? null;
+          console.log('[OrderModal] resolved createdId by orderCode:', createdId, { code, found });
+        } catch (e) {
+          console.warn('[OrderModal] fallback search by orderCode failed', e);
+        }
+      }
 
-      // Intentar generar y subir factura automáticamente — usar la orden completa desde servidor
+      if (!createdId) {
+        console.warn("createOrder did not return an id, skipping confirmation step");
+      }
+
+      let confirmedOrder: any = null;
       try {
-        const res = await getOrderById(created.id);
-        const payload = (res as any).data as any;
-        let fullOrder = payload?.data ? (payload.data as Order) : (payload as Order);
+        if (createdId) {
+          // If user provided a pay amount > 0, mark as paid for that amount; otherwise register as debt
+          const amountNum = Number(payAmount ?? 0);
+          const opts: any = amountNum > 0
+            ? { paid: true, amount: amountNum, paymentMethod: chosenPaymentMethod }
+            : { paid: false };
+          const cRes = await confirmOrder(createdId, opts);
+          confirmedOrder = cRes?.data ?? cRes;
+        }
+      } catch (err: any) {
+        console.warn("No se pudo confirmar la orden automáticamente:", err);
+      }
 
-        // Normalizar company
-        try {
-          const companyId = (fullOrder as any).companyId ?? fullOrder.company?.id;
-          if ((!fullOrder.company || !(fullOrder.company as any).tradeName) && companyId) {
-            const c = await api.get(`/companies/${companyId}`);
-            fullOrder.company = c.data?.data ?? c.data;
-          } else if (fullOrder.company && (fullOrder.company as any).data) {
-            fullOrder.company = (fullOrder.company as any).data;
+      // If requested, mark order as enviado (sent)
+      try {
+        if (createdId && markAsSent) {
+          await updateOrderStatus(createdId, 'enviado');
+          console.log('[OrderModal] order marked as enviado for', createdId);
+        }
+      } catch (e) {
+        console.warn('[OrderModal] failed to mark order as enviado', e);
+      }
+
+      // Always try to fetch the fresh order from server after confirmation attempt
+      let fullOrder: Order | null = null;
+      try {
+        if (createdId) {
+          try {
+            const res = await getOrderById(createdId);
+            const payloadAny = (res as any).data as any;
+            fullOrder = payloadAny?.data ? (payloadAny.data as Order) : (payloadAny as Order);
+          } catch (fetchErr) {
+            // if fetching fails, fallback to whatever confirm returned (if it's a full order)
+            if (confirmedOrder && (confirmedOrder.items || confirmedOrder.orderCode || confirmedOrder.paymentStatus)) {
+              fullOrder = confirmedOrder as Order;
+            } else {
+              console.warn('[OrderModal] no se pudo obtener la orden actualizada tras confirmar:', fetchErr);
+            }
           }
-        } catch (e) {
-          console.warn("No se pudo normalizar company en OrderModal:", e);
+        } else if (confirmedOrder && (confirmedOrder.items || confirmedOrder.orderCode || confirmedOrder.paymentStatus)) {
+          fullOrder = confirmedOrder as Order;
         }
 
-        // Normalizar customer
-        try {
-          const customerId = (fullOrder as any).customerId ?? (fullOrder.customer as any)?.id;
-          if ((!fullOrder.customer || !(fullOrder.customer as any).name) && customerId) {
-            const cust = await getCustomerById(customerId);
-            fullOrder.customer = cust ?? (cust as any).data ?? fullOrder.customer;
-          } else if (fullOrder.customer && (fullOrder.customer as any).data) {
-            fullOrder.customer = (fullOrder.customer as any).data;
+        if (!fullOrder) {
+          console.warn("No se obtuvo la orden completa para generar factura, se omite la subida de factura.");
+        } else {
+          let pdfOrder: any = null;
+          try {
+            pdfOrder = JSON.parse(JSON.stringify(fullOrder));
+          } catch (e) {
+            pdfOrder = fullOrder as any;
           }
-        } catch (e) {
-          console.warn("No se pudo normalizar customer en OrderModal:", e);
-        }
 
-        const asPdf = pdf(<InvoicePdfDocument order={fullOrder} />);
-        const blob = await asPdf.toBlob();
-        const filename = `factura-${fullOrder.orderCode || fullOrder.id}.pdf`;
-        console.log("[OrderModal] Subiendo factura generada", { filename, size: blob.size });
-        const uploaded = await uploadOrderInvoice(fullOrder.id, blob, filename);
-        console.log("[OrderModal] Factura subida", uploaded);
+          try {
+            // Ensure company object is populated for the PDF
+            try {
+              const companyId = (fullOrder as any).companyId ?? fullOrder.company?.id;
+              if ((!fullOrder.company || !(fullOrder.company as any)?.tradeName) && companyId) {
+                // dynamic import of api to avoid circulars
+                const api = (await import("../../services/api")).default;
+                const cRes = await api.get(`/companies/${companyId}`);
+                fullOrder.company = cRes.data?.data ?? cRes.data ?? fullOrder.company;
+              } else if (fullOrder.company && (fullOrder.company as any).data) {
+                fullOrder.company = (fullOrder.company as any).data;
+              }
+            } catch (e) {
+              console.warn("No se pudo obtener company adicional para la factura:", e);
+            }
+
+            // Ensure customer object is populated for the PDF
+            try {
+              const customerId = (fullOrder as any).customerId ?? (fullOrder.customer as any)?.id;
+              if ((!fullOrder.customer || !(fullOrder.customer as any)?.name) && customerId) {
+                const cust = await getCustomerById(customerId);
+                fullOrder.customer = cust ?? (cust as any).data ?? fullOrder.customer;
+              } else if (fullOrder.customer && (fullOrder.customer as any).data) {
+                fullOrder.customer = (fullOrder.customer as any).data;
+              }
+            } catch (e) {
+              console.warn('No se pudo obtener customer adicional para la factura:', e);
+            }
+
+            // Generate invoice using the full template and upload using fullOrder.id
+            try {
+              const normalizeOrderForPdf = (o: any) => {
+                const companySrc = o.company ?? authCompany ?? {};
+                const customerSrc = o.customer ?? customerDetails ?? {};
+                let itemsSrc = Array.isArray(o.items) ? o.items : [];
+                // fallback to selected items when API did not return items for newly created order
+                if ((!itemsSrc || itemsSrc.length === 0) && Array.isArray(selected) && selected.length > 0) {
+                  itemsSrc = selected.map(s => ({ product: s.product, quantity: s.quantity, unitPrice: s.product.price }));
+                }
+
+                const company = {
+                  tradeName: companySrc.tradeName ?? companySrc.legalName ?? companySrc.name ?? "",
+                  legalName: companySrc.legalName ?? companySrc.tradeName ?? companySrc.name ?? "",
+                  taxId: companySrc.taxId ?? companySrc.nit ?? companySrc.documentId ?? "",
+                  fiscalAddress: companySrc.fiscalAddress ?? companySrc.address ?? companySrc.street ?? "",
+                  city: companySrc.city ?? companySrc.town ?? "",
+                  state: companySrc.state ?? companySrc.region ?? "",
+                  companyEmail: companySrc.companyEmail ?? companySrc.email ?? "",
+                  companyPhone: companySrc.companyPhone ?? companySrc.phone ?? companySrc.telephone ?? "",
+                };
+
+                const customer = {
+                  name: (customerSrc.name ?? `${customerSrc.firstName ?? ""} ${customerSrc.lastName ?? ""}`.trim()) || customerSrc.fullName || (customerDetails?.name ?? ""),
+                  documentId: customerSrc.documentId ?? customerSrc.document ?? customerSrc.identification ?? "",
+                  email: customerSrc.email ?? customerSrc.contactEmail ?? "",
+                  phone: customerSrc.phone ?? customerSrc.contactPhone ?? "",
+                  address: customerSrc.address ?? customerSrc.fiscalAddress ?? customerSrc.street ?? "",
+                };
+
+                const items = itemsSrc.map((it: any) => ({
+                  id: it.id ?? it.itemId ?? it.productId ?? `${Math.random().toString(36).slice(2, 9)}`,
+                  product: { name: it.product?.name ?? it.productName ?? it.name ?? (it.productId ? `Producto ${it.productId}` : "Producto") },
+                  unitPrice: Number(it.unitPrice ?? it.price ?? it.product?.price ?? it.unit_price ?? 0),
+                  quantity: Number(it.quantity ?? it.qty ?? it.amount ?? 1),
+                }));
+
+                const createdAt = o.createdAt ?? o.created_at ?? o.created ?? new Date().toISOString();
+
+                return { ...o, createdAt, company, customer, items };
+              };
+
+              const pdfOrderToSend = normalizeOrderForPdf(fullOrder as any);
+              console.log('[OrderModal] pdfOrderToSend sample:', { orderCode: pdfOrderToSend.orderCode, createdAt: pdfOrderToSend.createdAt, company: pdfOrderToSend.company, customer: pdfOrderToSend.customer, itemsCount: pdfOrderToSend.items.length });
+              try { console.log('[OrderModal] pdfOrderToSend full:', JSON.stringify(pdfOrderToSend, null, 2)); } catch (e) {}
+
+              const asPdf = pdf(<InvoicePdfDocument order={pdfOrderToSend} />);
+              const blob = await asPdf.toBlob();
+              const filename = `factura-${fullOrder.orderCode || fullOrder.id}.pdf`;
+              const uploadId = fullOrder.id ?? createdId ?? null;
+              if (!uploadId) {
+                console.warn('[clientOrders] upload skipped: no order id available for upload', { fullOrder, createdId });
+              } else {
+                await uploadOrderInvoice(uploadId, blob, filename);
+                console.log('Factura generada y subida correctamente para', uploadId);
+              }
+            } catch (errPdf) {
+              console.error('Error generando/subiendo factura (PDF) con template:', errPdf);
+              throw errPdf;
+            }
+          } catch (pdfErr: any) {
+            console.error("Error generando/subiendo factura automática:", pdfErr);
+          }
+        }
       } catch (err: any) {
         console.error("Error generando/subiendo factura automática:", err, err?.response?.data);
         alert("Orden creada, pero no se pudo adjuntar la factura automáticamente. " + (err?.response?.data?.message || ""));
       }
 
-      onCreated();
+      if (orderToEdit) {
+        onUpdated?.(confirmedOrder ?? (created as any));
+      } else {
+        onCreated?.();
+      }
       onClose();
     } catch (err) {
       console.error("Error al crear orden:", err);
@@ -210,168 +411,117 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
     }
   };
 
-  const total = selected.reduce(
-    (sum, item) => sum + safeNumber(item.product.price) * safeNumber(item.quantity),
-    0
-  );
-
-  if (!isOpen) return null;
-
-  const styles = StyleSheet.create({
-    page: { padding: 20, fontSize: 11, fontFamily: "Helvetica" },
-    header: { flexDirection: "row", justifyContent: "space-between", marginBottom: 12 },
-    title: { fontSize: 14, fontWeight: "bold" },
-    section: { marginVertical: 6 },
-    tableHeader: { flexDirection: "row", borderBottomWidth: 1, paddingBottom: 6, marginTop: 6 },
-    th: { fontWeight: "bold" },
-    row: { flexDirection: "row", paddingVertical: 6, borderBottomWidth: 0.5, borderBottomColor: "#eee" },
-    desc: { width: "60%" },
-    qty: { width: "15%", textAlign: "right" },
-    price: { width: "25%", textAlign: "right" },
-    totals: { marginTop: 8, alignSelf: "flex-end", width: "40%" },
-    totalsRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 },
-  });
-
-  function formatCurrency(n: number) {
-    return `COP ${n.toLocaleString("es-CO", { minimumFractionDigits: 2 })}`;
-  }
-
-  const OrderPdfDocument = () => (
-    <Document>
-      <Page size="A4" style={styles.page}>
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.title}>Orden de compra</Text>
-            <Text>Empresa: {authCompany?.tradeName ?? (companyId ?? "Sin empresa")}</Text>
-            <Text>Email: {authCompany?.companyEmail ?? "N/D"}</Text>
-            <Text>Teléfono: {authCompany?.companyPhone ?? "N/D"}</Text>
-          </View>
-          <View>
-            {/* Mostrar fecha/fecha-hora con zona explícita para evitar desajustes */}
-            <Text>
-              Fecha:{" "}
-              {new Date().toLocaleString("es-CO", { timeZone: "America/Bogota" })}
-            </Text>
-            <Text>Descripción: {description || "-"}</Text>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={{ fontWeight: "bold", marginBottom: 6 }}>Items</Text>
-
-          <View style={styles.tableHeader}>
-            <Text style={[styles.th, styles.desc]}>Descripción</Text>
-            <Text style={[styles.th, styles.qty]}>Cant.</Text>
-            <Text style={[styles.th, styles.price]}>Subtotal</Text>
-          </View>
-
-          {selected.map((it, idx) => {
-            const subtotal = safeNumber(it.product.price) * safeNumber(it.quantity);
-            return (
-              <View key={idx} style={styles.row} wrap={false}>
-                <Text style={styles.desc}>{it.product.name}</Text>
-                <Text style={styles.qty}>{it.quantity}</Text>
-                <Text style={styles.price}>{formatCurrency(subtotal)}</Text>
-              </View>
-            );
-          })}
-        </View>
-
-        <View style={styles.totals}>
-          <View style={styles.totalsRow}>
-            <Text>Subtotal</Text>
-            <Text>{formatCurrency(total)}</Text>
-          </View>
-          <View style={[styles.totalsRow, { fontWeight: "bold" }]}>
-            <Text>Total</Text>
-            <Text>{formatCurrency(total)}</Text>
-          </View>
-        </View>
-      </Page>
-    </Document>
-  );
+  const total = selected.reduce((sum, item) => sum + safeNumber(item.product.price) * safeNumber(item.quantity), 0);
 
   const handlePreviewPdf = async () => {
     try {
       if (selected.length === 0) return;
-      const asPdf = pdf(<OrderPdfDocument />);
+      const pdfOrder: any = {
+        id: 'preview',
+        orderCode: undefined,
+        description,
+        items: selected.map(s => ({ product: s.product, quantity: s.quantity })),
+        total,
+        customer: customerDetails ?? undefined,
+        company: authCompany ?? undefined,
+      };
+      const asPdf = pdf(<InvoicePdfDocument order={pdfOrder} />);
       const blob = await asPdf.toBlob();
       const url = URL.createObjectURL(blob);
       window.open(url, "_blank");
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (err) {
       console.error("Error generando PDF:", err);
-      alert("Error generando PDF");
+      push("Error generando PDF", { type: 'error' });
     }
   };
 
+  if (!isOpen) return null;
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-[9999]">
-      <div className="bg-white rounded-lg w-full max-w-6xl shadow-xl max-h-screen flex flex-col">
-        <div className="p-6 border-b">
+      <div className="bg-white rounded-lg w-full max-w-6xl shadow-xl max-h-[90vh] overflow-hidden flex flex-col relative">
+        <button onClick={onClose} aria-label="Cerrar" title="Cerrar" className="absolute right-4 top-4 rounded-full w-8 h-8 flex items-center justify-center bg-gray-200 hover:bg-gray-300 text-gray-700">✕</button>
+
+        <div className="overflow-auto max-h-[72vh]">
+          <div className="p-6 border-b">
           <h2 className="text-xl font-bold text-[#973c00] mb-4">Crear orden</h2>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Descripción de la orden</label>
-            <textarea
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              rows={2}
-              maxLength={255}
-              className="w-full border rounded px-3 py-2"
-              placeholder="Ej. Pedido urgente para cliente VIP"
-            />
+            <textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} maxLength={255} className="w-full border rounded px-3 py-2" placeholder="Ej. Pedido urgente para cliente VIP" />
             <div className="text-xs text-gray-500 mt-1">{description.length}/255</div>
           </div>
 
           <div className="mt-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">Cliente</label>
-            <select
-              value={customerId}
-              onChange={(e) => setCustomerId(e.target.value)}
-              className="w-full border rounded px-3 py-2"
-            >
+            <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className="w-full border rounded px-3 py-2">
               <option value="">Sin cliente</option>
               {customers.map((customer) => (
-                <option key={customer.id} value={customer.id}>
-                  {customer.name}
-                </option>
+                <option key={customer.id} value={customer.id}>{customer.name}</option>
               ))}
             </select>
           </div>
-        </div>
 
-        <div className="grid grid-cols-2 gap-6 px-6 py-4 overflow-hidden flex-grow">
-          <div className="overflow-y-auto pr-2">
-            <h3 className="font-semibold mb-4">Productos</h3>
+          <div className="mt-3">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Monto a pagar ahora (dejar vacío para registrar como deuda)</label>
+            <div className="grid grid-cols-2 gap-2 items-center">
+              <input type="number" placeholder="0" value={payAmount ?? ""} onChange={e => setPayAmount(e.target.value ? Number(e.target.value) : undefined)} className="border px-2 py-1 rounded" />
+              <div>
+                {paymentMethods && paymentMethods.length > 0 ? (
+                  <select value={payMethod || ""} onChange={e => {
+                    const v = e.target.value;
+                    setPayMethod(v);
+                    if (v !== 'Otro') setCustomPayMethod('');
+                  }} className="w-full border px-2 py-1 rounded">
+                    <option value="">Seleccionar método</option>
+                    {[...new Set([...paymentMethods, 'Otro'])].map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input placeholder="Método (efectivo, transferencia...)" value={payMethod} onChange={e => setPayMethod(e.target.value)} className="border px-2 py-1 rounded w-full" />
+                )}
 
-            <input
-              type="text"
-              placeholder="Buscar producto..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="border px-3 py-2 rounded mb-4 w-full"
-            />
-
-            <div className="grid grid-cols-2 gap-4">
-              {products
-                .filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()))
-                .map(product => (
-                  <div
-                    key={product.id}
-                    className="border p-4 rounded shadow hover:shadow-lg cursor-pointer"
-                    onClick={() => handleAdd(product)}
-                  >
-                    <p className="font-semibold">{product.name}</p>
-                    <p className="text-sm text-gray-600">Precio: COP {product.price}</p>
-                    <p className="text-sm text-gray-600">Stock: {product.stock}</p>
-                  </div>
-                ))}
+                {payMethod === 'Otro' && (
+                  <input placeholder="Indica el método" value={customPayMethod} onChange={e => setCustomPayMethod(e.target.value)} className="border px-2 py-1 rounded w-full mt-2" />
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="bg-yellow-50 p-4 rounded-lg shadow-inner overflow-y-auto">
-            <h3 className="font-semibold mb-4">Selección</h3>
+          <div className="mt-4">
+            <label className="inline-flex items-center">
+              <input type="checkbox" className="form-checkbox h-4 w-4 text-green-600" checked={markAsSent} onChange={e => setMarkAsSent(e.target.checked)} />
+              <span className="ml-2 text-sm text-gray-700">Marcar orden como enviado</span>
+            </label>
+          </div>
+        </div>
+
+          <div className="grid gap-6 px-6 py-4" style={{ gridTemplateColumns: '1fr 420px' }}>
+          <div className="pr-2">
+            <div className="border p-6 rounded-lg shadow-md bg-white overflow-auto" style={{ maxHeight: '60vh' }}>
+              <h3 className="font-semibold mb-4 text-lg">Productos</h3>
+              <input type="text" placeholder="Buscar producto..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="border px-3 py-2 rounded mb-4 w-full" />
+              <div className="flex flex-col space-y-2">
+                {products
+                  .filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()))
+                  .map(product => (
+                    <div key={product.id} className="border px-2 py-2 rounded-sm hover:shadow-sm cursor-pointer flex justify-between items-center min-h-[48px]" onClick={() => handleAdd(product)}>
+                      <div>
+                        <p className="font-medium text-sm">{product.name}</p>
+                        <p className="text-xs text-gray-600 mt-1">Precio: COP {product.price}</p>
+                        <p className="text-xs text-gray-600">Stock: {product.stock}</p>
+                      </div>
+                      <div className="text-xs text-gray-600">Agregar</div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="border p-6 rounded-lg shadow-md bg-yellow-50 overflow-auto" style={{ maxHeight: '60vh' }}>
+            <h3 className="font-semibold mb-4 text-lg">Selección</h3>
             {insufficient.length > 0 && (
               <div className="mb-3 p-3 bg-red-50 border border-red-200 text-red-700 rounded">
                 <strong>Stock insuficiente:</strong>
@@ -382,88 +532,59 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated }: Pr
                 </ul>
               </div>
             )}
+
             {selected.length === 0 ? (
               <p className="text-gray-500">No has seleccionado productos.</p>
             ) : (
-              <ul className="space-y-4">
+              <ul className="space-y-2">
                 {selected.map((item, index) => (
-                  <li key={item.product.id} className="border p-4 rounded shadow">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <p className="font-semibold">{item.product.name}</p>
-                        <p className="text-sm text-gray-600">Precio unitario: COP {item.product.price}</p>
-                        <p className="text-sm text-gray-600">Stock disponible: {item.product.stock}</p>
-                        <input
-                          type="number"
-                          min={1}
-                          max={item.product.stock}
-                          value={selected[index].quantity || ""}
-                          onChange={e => {
-                            const raw = e.target.value;
-                            const updated = [...selected];
+                  <li key={item.product.id} className="border px-2 py-2 rounded-sm shadow-sm bg-white flex items-center justify-between min-h-[44px]">
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{item.product.name}</p>
+                      <p className="text-xs text-gray-600">Precio: COP {item.product.price} · Stock: {item.product.stock}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={1}
+                        max={item.product.stock}
+                        value={selected[index].quantity || ""}
+                        onChange={e => {
+                          const raw = e.target.value;
+                          const updated = [...selected];
 
-                            if (raw === "") {
-                              updated[index].quantity = 0;
-                              setSelected(updated);
-                              return;
-                            }
+                          if (raw === "") {
+                            updated[index].quantity = 0;
+                            setSelected(updated);
+                            return;
+                          }
 
-                            const parsed = parseInt(raw, 10);
-                            const max = item.product.stock;
+                          const parsed = parseInt(raw, 10);
+                          const max = item.product.stock;
 
-                            if (!isNaN(parsed)) {
-                              updated[index].quantity = Math.min(Math.max(1, parsed), max);
-                              setSelected(updated);
-                            }
-                          }}
-                          className="border px-2 py-1 rounded mt-2 w-20"
-                        />
-                      </div>
-                      <button
-                        onClick={() => handleRemove(index)}
-                        className="bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm"
-                        title="Eliminar"
-                      >
-                        ✕
-                      </button>
+                          if (!isNaN(parsed)) {
+                            updated[index].quantity = Math.min(Math.max(1, parsed), max);
+                            setSelected(updated);
+                          }
+                        }}
+                        className="border px-2 py-1 rounded w-16 text-sm"
+                      />
+                      <button onClick={() => handleRemove(index)} className="bg-red-500 text-white rounded w-8 h-8 flex items-center justify-center text-sm" title="Eliminar">✕</button>
                     </div>
                   </li>
                 ))}
               </ul>
             )}
 
-            <div className="mt-6 text-right font-bold text-[#973c00] text-lg">Total: COP {total.toLocaleString("es-CO")}</div>
+            <div className="mt-6 text-right font-bold text-[#973c00] text-2xl">Total: COP {total.toLocaleString("es-CO")}</div>
+          </div>
           </div>
         </div>
 
-        <div className="px-6 py-4 border-t flex justify-between items-center gap-4">
+        <div className="px-6 py-4 border-t flex justify-end items-center gap-4">
           <div className="flex items-center gap-3">
-            <button
-              onClick={onClose}
-              className="bg-gray-300 text-gray-800 rounded-full w-10 h-10 flex items-center justify-center"
-              title="Cancelar"
-            >
-              ⏴
-            </button>
-
-            <button
-              onClick={handlePreviewPdf}
-              disabled={selected.length === 0}
-              className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
-              title="Previsualizar PDF"
-            >
-              Previsualizar PDF
-            </button>
-          </div>
-
-          <div>
-            <button
-              onClick={handleSubmit}
-              disabled={loading || selected.length === 0 || insufficient.length > 0}
-              className="bg-green-600 text-white px-4 py-2 rounded disabled:opacity-50"
-            >
-              {loading ? "Guardando..." : "Guardar orden"}
-            </button>
+            <button onClick={handlePreviewPdf} disabled={selected.length === 0} className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50" title="Previsualizar PDF">Previsualizar PDF</button>
+            <button onClick={handleSubmit} disabled={loading || selected.length === 0 || insufficient.length > 0} className="bg-green-600 text-white px-4 py-2 rounded disabled:opacity-50">{loading ? "Guardando..." : "Guardar orden"}</button>
           </div>
         </div>
       </div>

@@ -31,7 +31,8 @@ export function InvoicePdfDocument({ order }: { order: Order }) {
     return Number.isFinite(n) ? n : 0;
   };
 
-  const total = order.items.reduce((sum, item) => {
+  const items = Array.isArray(order.items) ? order.items : [];
+  const total = items.reduce((sum, item) => {
     const unit = safeNumber(item.unitPrice);
     const qty = safeNumber(item.quantity);
     return sum + unit * qty;
@@ -102,7 +103,7 @@ export function InvoicePdfDocument({ order }: { order: Order }) {
             <Text style={[invoiceStyles.th, invoiceStyles.price]}>Subtotal</Text>
           </View>
 
-          {order.items.map((item) => {
+          {items.map((item) => {
             const unit = safeNumber(item.unitPrice);
             const subtotal = unit * safeNumber(item.quantity);
             return (

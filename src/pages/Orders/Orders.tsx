@@ -28,6 +28,21 @@ const friendlyDate = (iso: string) => {
   }
 };
 
+const renderPaymentBadge = (status?: Order['paymentStatus']) => {
+  const s = status ?? 'generada';
+  switch (s) {
+    case 'pagado':
+      return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800">Pagado</span>;
+    case 'deuda':
+      return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800">Deuda</span>;
+    case 'credito':
+      return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-800">Crédito</span>;
+    case 'generada':
+    default:
+      return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-800">Generada</span>;
+  }
+};
+
 
 
 /* ---------- FiltersRow (local) ---------- */
@@ -36,6 +51,8 @@ function FiltersRow({
   setSearchTerm,
   statusFilter,
   setStatusFilter,
+  paymentFilter,
+  setPaymentFilter,
   dateFrom,
   setDateFrom,
   dateTo,
@@ -46,6 +63,8 @@ function FiltersRow({
   setSearchTerm: (v: string) => void;
   statusFilter: string;
   setStatusFilter: (v: string) => void;
+  paymentFilter: string;
+  setPaymentFilter: (v: string) => void;
   dateFrom: string;
   setDateFrom: (v: string) => void;
   dateTo: string;
@@ -75,9 +94,24 @@ function FiltersRow({
           aria-label="Filtrar por estado"
         >
           <option value="">Todos los estados</option>
-          <option value="recibido">Recibido</option>
-          <option value="en_proceso">En proceso</option>
+          <option value="sin_enviar">Sin enviar</option>
           <option value="enviado">Enviado</option>
+        </select>
+      </div>
+
+      <div>
+        <label className="sr-only">Filtrar por pago</label>
+        <select
+          value={paymentFilter}
+          onChange={(e) => setPaymentFilter(e.target.value)}
+          className="border px-3 py-2 rounded w-40 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+          aria-label="Filtrar por pago"
+        >
+          <option value="">Todos los pagos</option>
+          <option value="pagado">Pagado</option>
+          <option value="deuda">Deuda</option>
+          <option value="generada">Generada</option>
+          <option value="credito">Crédito</option>
         </select>
       </div>
 
@@ -127,6 +161,7 @@ export default function Orders() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [paymentFilter, setPaymentFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
@@ -170,6 +205,10 @@ export default function Orders() {
   }, [searchTerm, statusFilter, dateFrom, dateTo]);
 
   useEffect(() => {
+    setPage(1);
+  }, [paymentFilter]);
+
+  useEffect(() => {
     if (meta?.totalPages && page > meta.totalPages) {
       setPage(meta.totalPages);
     }
@@ -186,6 +225,10 @@ export default function Orders() {
 
     if (statusFilter) {
       filtered = filtered.filter((o) => o.status === statusFilter);
+    }
+
+    if (paymentFilter) {
+      filtered = filtered.filter((o) => (o.paymentStatus ?? 'generada') === paymentFilter);
     }
 
     if (dateFrom) {
@@ -207,7 +250,7 @@ export default function Orders() {
   useEffect(() => {
     applyFilters();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm, statusFilter, dateFrom, dateTo, orders]);
+  }, [searchTerm, statusFilter, paymentFilter, dateFrom, dateTo, orders]);
 
   const handleDelete = async (id: string) => {
     try {
@@ -300,6 +343,8 @@ export default function Orders() {
         setSearchTerm={setSearchTerm}
         statusFilter={statusFilter}
         setStatusFilter={setStatusFilter}
+        paymentFilter={paymentFilter}
+        setPaymentFilter={setPaymentFilter}
         dateFrom={dateFrom}
         setDateFrom={setDateFrom}
         dateTo={dateTo}
@@ -350,20 +395,12 @@ export default function Orders() {
               <div className="flex justify-between items-start gap-4">
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-[#973c00] truncate">{order.orderCode}</p>
-                  <p className="text-sm text-gray-600">
-                    Estado:{" "}
-                    <span
-                      className={`font-medium ${
-                        order.status === "enviado"
-                          ? "text-green-700"
-                          : order.status === "en_proceso"
-                          ? "text-yellow-700"
-                          : "text-gray-700"
-                      }`}
-                    >
-                      {order.status}
-                    </span>
-                  </p>
+                  <div className="flex items-center gap-3 mt-1">
+                    <p className="text-sm text-gray-600 mb-0">
+                      Estado: <span className={`font-medium ${order.status === "enviado" ? "text-green-700" : "text-gray-700"}`}>{order.status === 'enviado' ? 'Enviado' : 'Sin enviar'}</span>
+                    </p>
+                    <div>{renderPaymentBadge(order.paymentStatus)}</div>
+                  </div>
                   <p className="text-sm text-gray-500">{friendlyDate(order.createdAt)}</p>
 
                   <div className="mt-3">
@@ -378,8 +415,7 @@ export default function Orders() {
                       className="border px-2 py-1 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
                       aria-label={`Cambiar estado de ${order.orderCode}`}
                     >
-                      <option value="recibido">Recibido</option>
-                      <option value="en_proceso">En proceso</option>
+                      <option value="sin_enviar">Sin enviar</option>
                       <option value="enviado">Enviado</option>
                     </select>
                   </div>

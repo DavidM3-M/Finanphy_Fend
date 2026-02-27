@@ -54,6 +54,8 @@ export interface Customer {
   documentId?: string | null;
   address?: string | null;
   notes?: string | null;
+  debt?: string | number | null;
+  credit?: string | number | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -77,7 +79,7 @@ export interface User {
   isActive: boolean;
 }
 
-export type OrderStatus = 'recibido' | 'en_proceso' | 'enviado';
+export type OrderStatus = 'sin_enviar' | 'enviado';
 
 export interface Order {
   id: string;
@@ -90,6 +92,7 @@ export interface Order {
   customer?: Customer;
   items: OrderItem[];
   description?: string;
+  paymentStatus?: 'generada' | 'pagado' | 'deuda' | 'credito';
   invoiceUrl?: string | null;
   invoiceFilename?: string | null;
   invoiceMime?: string | null;
@@ -106,6 +109,8 @@ export interface OrderPayload {
   companyId: string;
   items: OrderItemPayload[];
   customerId?: string;
+  description?: string;
+  paymentMethod?: string;
 }
 
 // src/types/auth.ts

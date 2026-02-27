@@ -1,6 +1,7 @@
 import React from "react";
 import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
+import { ToastProvider } from "./components/ui/ToastProvider";
 
 // Contextos
 import { AuthProvider, useAuth } from "./context/AuthContext";
@@ -64,8 +65,10 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Toaster position="top-right" />
-        <AppRoutes />
+        <ToastProvider>
+          <Toaster position="top-right" />
+          <AppRoutes />
+        </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
   );

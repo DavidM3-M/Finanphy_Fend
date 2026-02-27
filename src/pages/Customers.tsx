@@ -6,7 +6,11 @@ import {
   deleteCustomer,
   getCustomers,
   updateCustomer,
+  getCustomerPayments,
 } from "../services/customers";
+import { getByCompanyAndCustomer } from "../services/clientOrders";
+import type { Order } from "../types";
+import OrderDetailModal from "../components/Orders/OrderDetailModal";
 import toast from "react-hot-toast";
 
 const emptyForm = {
@@ -30,6 +34,12 @@ export default function Customers(): React.ReactElement {
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [detailCustomer, setDetailCustomer] = useState<Customer | null>(null);
+  const [customerOrders, setCustomerOrders] = useState<Order[]>([]);
+  const [customerPayments, setCustomerPayments] = useState<any[]>([]);
+  const [loadingCustomerData, setLoadingCustomerData] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   const loadCustomers = useCallback(async () => {
     if (!companyId) return;
@@ -138,6 +148,40 @@ export default function Customers(): React.ReactElement {
     }
   };
 
+  const loadCustomerDetails = async (customerId: string) => {
+    if (!companyId || !customerId) return;
+    setLoadingCustomerData(true);
+    try {
+      // Try to fetch orders for this customer (backend may return paginated shape)
+      try {
+        const res: any = await getByCompanyAndCustomer(companyId, customerId, undefined, 1, 100);
+        const orders = res?.data?.data ?? res?.data ?? [];
+        setCustomerOrders(Array.isArray(orders) ? orders : []);
+      } catch (err) {
+        setCustomerOrders([]);
+      }
+
+      // Fetch customer payments/credits
+      try {
+        const payments = await getCustomerPayments(customerId);
+        setCustomerPayments(Array.isArray(payments) ? payments : []);
+      } catch (err) {
+        setCustomerPayments([]);
+      }
+    } finally {
+      setLoadingCustomerData(false);
+    }
+  };
+
+  const API_BASE = (process.env.REACT_APP_API_URL || "").replace(/\/$/, "");
+  const resolveUrl = (url?: string | null) => {
+    if (!url) return undefined;
+    if (/^https?:\/\//i.test(url)) return url;
+    if (!API_BASE) return url;
+    if (!url.startsWith("/")) return `${API_BASE}/uploads/${url}`;
+    return `${API_BASE}${url}`;
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -197,7 +241,7 @@ export default function Customers(): React.ReactElement {
                       <div className="text-xs text-[#7b3306] mt-1">{customer.address}</div>
                     )}
                   </div>
-                  <div className="flex gap-2">
+                    <div className="flex gap-2">
                     <button
                       onClick={() => handleEdit(customer)}
                       className="px-3 py-1 text-sm rounded bg-[#fe9a00] text-white"
@@ -210,11 +254,22 @@ export default function Customers(): React.ReactElement {
                     >
                       Eliminar
                     </button>
+                    <button
+                      onClick={async () => {
+                        setDetailCustomer(customer);
+                        setDetailModalOpen(true);
+                        await loadCustomerDetails(customer.id);
+                      }}
+                      className="px-3 py-1 text-sm rounded bg-blue-600 text-white"
+                    >
+                      Ver deudas/créditos
+                    </button>
                   </div>
                 </div>
                 {customer.notes && (
                   <div className="text-xs text-[#7b3306] mt-2">{customer.notes}</div>
                 )}
+                
               </li>
             ))}
           </ul>
@@ -313,6 +368,120 @@ export default function Customers(): React.ReactElement {
             </form>
           </div>
         </div>
+      )}
+      {detailModalOpen && detailCustomer && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-lg w-full max-w-4xl max-h-[85vh] overflow-auto p-4">
+            <div className="flex items-start justify-between gap-4 border-b pb-3">
+              <div>
+                <h3 className="text-lg font-semibold text-[#973c00]">Detalle: {detailCustomer.name}</h3>
+                <div className="text-xs text-[#7b3306]">{[detailCustomer.email, detailCustomer.phone, detailCustomer.documentId].filter(Boolean).join(' • ')}</div>
+                {detailCustomer.address && <div className="text-xs text-[#7b3306] mt-1">{detailCustomer.address}</div>}
+              </div>
+              <button onClick={() => { setDetailModalOpen(false); setDetailCustomer(null); }} className="text-gray-500">✕</button>
+            </div>
+
+            <div className="mt-4">
+              <h4 className="font-semibold text-[#973c00]">Información</h4>
+              <div className="text-sm mt-2">
+                <div><strong>Notas:</strong> {detailCustomer.notes || '-'}</div>
+                <div className="mt-1"><strong>Creado:</strong> {detailCustomer.createdAt || '-'}</div>
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-4">
+              <div>
+                <h4 className="font-semibold text-sm text-[#973c00]">Deudas (órdenes)</h4>
+                {loadingCustomerData ? (
+                  <div className="text-sm text-[#bb4d00]">Cargando órdenes...</div>
+                ) : customerOrders.length === 0 ? (
+                  <div className="text-xs text-[#7b3306]">No se encontraron órdenes.</div>
+                ) : (
+                  <ul className="space-y-2 mt-2">
+                    {customerOrders.map((o) => {
+                      const total = (o.items || []).reduce((s, it) => s + (Number((it as any).unitPrice) || 0) * (Number((it as any).quantity) || 0), 0);
+                      return (
+                            <li key={o.id} className="p-2 border rounded bg-white text-xs">
+                              <div className="flex items-center justify-between">
+                                <div className="cursor-pointer" onClick={async () => {
+                                  setSelectedOrder(o);
+                                }}>
+                                  <div className="font-semibold">{o.orderCode}</div>
+                                  <div className="text-xs text-gray-600">Estado: {o.status} · Pago: {o.paymentStatus ?? 'pendiente'}</div>
+                                </div>
+                                <div className="text-sm font-bold">COP {total.toLocaleString('es-CO')}</div>
+                              </div>
+                              <div className="mt-2">
+                                {o.invoiceUrl && (() => {
+                                  const invoiceLink = resolveUrl(o.invoiceUrl);
+                                  return (
+                                    <a href={invoiceLink} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline">Factura</a>
+                                  );
+                                })()}
+                              </div>
+                            </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+
+              <div>
+                <h4 className="font-semibold text-sm text-[#973c00]">Créditos / Abonos</h4>
+                {loadingCustomerData ? (
+                  <div className="text-sm text-[#bb4d00]">Cargando abonos...</div>
+                ) : customerPayments.length === 0 ? (
+                  <div className="text-xs text-[#7b3306]">No se encontraron abonos.</div>
+                ) : (
+                  <ul className="space-y-2 mt-2">
+                    {customerPayments.map((p: any) => {
+                      // heuristics to find evidence URL in payment object
+                      const evidenceCandidates = [
+                        p.evidenceUrl,
+                        p.evidence?.url,
+                        p.metadata?.evidenceUrl,
+                        p.metadata?.evidence?.url,
+                        p.fileUrl,
+                        p.evidenceUrlFull,
+                        p.url,
+                      ];
+                      const evidenceRaw = evidenceCandidates.find((c) => c);
+                      const evidenceUrl = resolveUrl(evidenceRaw as string | undefined);
+                      return (
+                        <li key={p.id || `${p.amount}-${p.createdAt}`} className="p-2 border rounded bg-white text-xs">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="font-semibold">COP {Number(p.amount).toLocaleString('es-CO', { minimumFractionDigits: 2 })}</div>
+                              <div className="text-xs text-gray-600">{new Date(p.paidAt || p.createdAt).toLocaleString()}</div>
+                              <div className="text-xs text-gray-600">Método: {p.paymentMethod || '-'}</div>
+                            </div>
+                            <div className="text-xs text-right">
+                              <div>Ref: {p.orderCode ?? p.orderId ?? (p.metadata?.orderId ?? '-')}</div>
+                              {evidenceUrl && (
+                                <div><a href={evidenceUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline">Comprobante</a></div>
+                              )}
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {selectedOrder && (
+        <OrderDetailModal
+          order={selectedOrder}
+          onClose={() => { setSelectedOrder(null); loadCustomerDetails(detailCustomer?.id ?? ''); }}
+          onUpdated={async (updated) => {
+            // refresh local lists after order update
+            setSelectedOrder(null);
+            if (detailCustomer?.id) await loadCustomerDetails(detailCustomer.id);
+          }}
+        />
       )}
     </div>
   );

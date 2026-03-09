@@ -8,6 +8,36 @@ import { generatePaymentReceiptBlob } from "../Customers/PaymentReceiptPdf";
 import { pdf } from "@react-pdf/renderer";
 import { InvoicePdfDocument } from "./InvoicePdf";
 
+function normalizeOrderForPdf(o: any) {
+  const companySrc = o.company ?? {};
+  const customerSrc = o.customer ?? {};
+  const itemsSrc = Array.isArray(o.items) ? o.items : [];
+  const company = {
+    tradeName: companySrc.tradeName ?? companySrc.legalName ?? "",
+    legalName: companySrc.legalName ?? companySrc.tradeName ?? "",
+    taxId: companySrc.taxId ?? "",
+    fiscalAddress: companySrc.fiscalAddress ?? "",
+    city: companySrc.city ?? "",
+    state: companySrc.state ?? "",
+    companyEmail: companySrc.companyEmail ?? "",
+    companyPhone: companySrc.companyPhone ?? "",
+  };
+  const customer = {
+    name: customerSrc.name ?? `${customerSrc.firstName ?? ""} ${customerSrc.lastName ?? ""}`.trim(),
+    documentId: customerSrc.documentId ?? "",
+    email: customerSrc.email ?? "",
+    phone: customerSrc.phone ?? "",
+    address: customerSrc.address ?? "",
+  };
+  const items = itemsSrc.map((it: any) => ({
+    id: it.id ?? it.productId ?? Math.random().toString(36).slice(2, 9),
+    product: { name: it.product?.name ?? it.productName ?? it.name ?? "" },
+    unitPrice: Number(it.unitPrice ?? it.price ?? it.product?.price ?? 0),
+    quantity: Number(it.quantity ?? it.qty ?? 1),
+  }));
+  return { ...o, company, customer, items, createdAt: o.createdAt ?? new Date().toISOString() };
+}
+
 interface Props {
   order?: Order | null;
   onClose: () => void;
@@ -39,6 +69,8 @@ export default function OrderDetailModal({ order, onClose, onUpdated }: Props) {
   const [creatingPayment, setCreatingPayment] = useState(false);
   const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
   const [uploadingInvoice, setUploadingInvoice] = useState(false);
+  const [loadedOrder, setLoadedOrder] = useState<Order | null>(null);
+  const [regeneratingInvoice, setRegeneratingInvoice] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -88,18 +120,70 @@ export default function OrderDetailModal({ order, onClose, onUpdated }: Props) {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    setLoadedOrder(null);
+    if (!order?.id) return;
+    (async () => {
+      try {
+        const res: any = await getOrderByIdService(order.id);
+        const payloadAny = (res as any).data as any;
+        const full = payloadAny?.data ? payloadAny.data : payloadAny;
+        if (!cancelled) setLoadedOrder(full as Order);
+      } catch (e) {
+        console.warn('No se pudo cargar la orden completa', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [order?.id]);
+
   const safeNumber = (v: any) => {
     const n = Number(v);
     return Number.isFinite(n) ? n : 0;
   };
 
+  const handleRegenerateInvoice = async () => {
+    if (!order?.id) return;
+    setRegeneratingInvoice(true);
+    try {
+      let fetchedOrder: any = loadedOrder ?? order;
+      try {
+        const res: any = await getOrderByIdService(order.id);
+        const payloadAny = (res as any).data as any;
+        fetchedOrder = payloadAny?.data ? payloadAny.data : (payloadAny ?? fetchedOrder);
+      } catch (e) {
+        console.warn('Using cached order for invoice regeneration', e);
+      }
+      const pdfOrder = normalizeOrderForPdf(fetchedOrder);
+      const asPdf = pdf(<InvoicePdfDocument order={pdfOrder} />);
+      const blob = await asPdf.toBlob();
+      const filename = `factura-${pdfOrder.orderCode || pdfOrder.id}.pdf`;
+      await uploadOrderInvoice(order.id, blob, filename);
+      push('Factura regenerada correctamente.', { type: 'success' });
+      try {
+        const res2: any = await getOrderByIdService(order.id);
+        const payload2 = (res2 as any).data as any;
+        const refreshed = payload2?.data ? payload2.data : payload2;
+        setLoadedOrder(refreshed as Order);
+        onUpdated?.(refreshed as Order);
+      } catch (e) { /* ignore refresh error */ }
+    } catch (err: any) {
+      console.error('Error regenerando factura:', err);
+      push('No se pudo regenerar la factura. ' + (err?.response?.data?.message || ''), { type: 'error' });
+    } finally {
+      setRegeneratingInvoice(false);
+    }
+  };
+
   const total = useMemo(() => {
-    if (!order) return 0;
-    return (order.items || []).reduce((acc, it) => acc + safeNumber(it.unitPrice) * safeNumber(it.quantity), 0);
-  }, [order]);
+    const src = loadedOrder ?? order;
+    if (!src) return 0;
+    return (src.items || []).reduce((acc, it) => acc + safeNumber(it.unitPrice) * safeNumber(it.quantity), 0);
+  }, [loadedOrder, order]);
 
   if (!order) return null;
-  const invoiceResolved = resolveUrl(order.invoiceUrl ?? order.invoiceFilename);
+  const displayOrder = loadedOrder ?? order;
+  const invoiceResolved = resolveUrl(displayOrder.invoiceUrl ?? displayOrder.invoiceFilename);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-[9999]">
@@ -126,7 +210,7 @@ export default function OrderDetailModal({ order, onClose, onUpdated }: Props) {
               <div className="border p-6 rounded-lg bg-white overflow-auto" style={{ maxHeight: '60vh' }}>
                 <h3 className="font-semibold mb-4">🛒 Productos</h3>
                 <ul className="space-y-2">
-                  {(order.items || []).map((item) => {
+                  {(displayOrder.items || []).map((item) => {
                     const unit = safeNumber(item.unitPrice);
                     const subtotal = unit * safeNumber(item.quantity);
                     return (
@@ -271,15 +355,26 @@ export default function OrderDetailModal({ order, onClose, onUpdated }: Props) {
               <div className="mt-4 text-sm text-gray-700">
                 <div>Estado: <span className="font-semibold">{order.status === 'enviado' ? 'Enviado' : 'Sin enviar'}</span></div>
                 <div className="mt-2">Cliente: <span className="font-medium">{order.customer?.name ?? 'N/D'}</span></div>
-                {(order.invoiceFilename || order.invoiceUrl) && (
-                  <div className="mt-3">
-                    <div className="text-xs text-[#7b3306]">Factura: {order.invoiceFilename ?? ''}</div>
-                    {invoiceResolved && (
-                      <div><a href={invoiceResolved} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline">Ver factura</a></div>
-                    )}
-                    {order.invoiceUploadedAt && <div className="text-xs text-gray-500">Subida: {new Date(order.invoiceUploadedAt).toLocaleString()}</div>}
-                  </div>
-                )}
+                <div className="mt-3">
+                  {(displayOrder.invoiceFilename || displayOrder.invoiceUrl) ? (
+                    <>
+                      <div className="text-xs text-[#7b3306]">Factura: {displayOrder.invoiceFilename ?? ''}</div>
+                      {invoiceResolved && (
+                        <div><a href={invoiceResolved} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline">Ver factura</a></div>
+                      )}
+                      {displayOrder.invoiceUploadedAt && <div className="text-xs text-gray-500">Subida: {new Date(displayOrder.invoiceUploadedAt).toLocaleString()}</div>}
+                    </>
+                  ) : (
+                    <div className="text-xs text-gray-500">Sin factura generada aún.</div>
+                  )}
+                  <button
+                    onClick={handleRegenerateInvoice}
+                    disabled={regeneratingInvoice}
+                    className="mt-2 w-full px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white text-sm rounded disabled:opacity-60"
+                  >
+                    {regeneratingInvoice ? 'Generando...' : 'Regenerar factura'}
+                  </button>
+                </div>
 
                 <div className="mt-3">
                   <label className="block text-sm font-medium text-gray-700">Subir / actualizar factura (PDF)</label>

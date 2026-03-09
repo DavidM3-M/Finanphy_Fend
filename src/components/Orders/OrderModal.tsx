@@ -413,7 +413,7 @@ export default function OrderModal({ isOpen, onClose, companyId, onCreated, orde
         id: 'preview',
         orderCode: undefined,
         description,
-        items: selected.map(s => ({ product: s.product, quantity: s.quantity })),
+        items: selected.map(s => ({ product: s.product, quantity: s.quantity, unitPrice: Number(s.product.price) })),
         total,
         customer: customerDetails ?? undefined,
         company: authCompany ?? undefined,
